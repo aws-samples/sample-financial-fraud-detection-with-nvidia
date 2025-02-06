@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
 # # Credit Card Transaction Data Cleanup and Prep
 #
 # This notebook shows the steps for cleanup and preparing the credit card transaction data for follow on GNN training with GraphSAGE.
@@ -238,10 +235,7 @@ def proprocess_data(tabformer_base_path):
     data[COL_ZIP].unique()
 
     # #### The 'Chip' column
-    #
-    #
-    #
-    #
+
 
     data[COL_CHIP].unique()
 
