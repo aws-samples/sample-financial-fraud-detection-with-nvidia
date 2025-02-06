@@ -581,7 +581,7 @@ def proprocess_data(tabformer_base_path):
     data = data[training_idx]
 
     # a lot of process has occurred, sort the data and reset the index
-    # data = data.sort_values(by=[COL_YEAR, COL_MONTH, COL_DAY, COL_TIME], ascending=False)
+    data = data.sort_values(by=[COL_YEAR, COL_MONTH, COL_DAY, COL_TIME], ascending=False)
     data.reset_index(inplace=True, drop=True)
 
     # Each transaction gets a unique ID
