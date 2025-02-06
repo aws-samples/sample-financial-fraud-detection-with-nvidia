@@ -42,7 +42,7 @@ This Blueprint targets users that:
 1. [**Clone the repo and setup environment to run the notebook**](./setup.md)
 <br>
 
-1. **Obtain NVIDIA Microservices (NIM) API key**
+2. **Obtain NVIDIA Microservices (NIM) API key**
 
 There are two possible methods to generate an API key for NIM:
    - Sign in to the [NVIDIA Build](https://build.nvidia.com/explore/discover?signin=true) portal with your email.
