@@ -39,16 +39,10 @@ This Blueprint targets users that:
 
 # Quickstart Guide
 
-1. **Clone the repo**
-
-   ```bash
-   git clone https://github.com/NVIDIA-AI-Blueprints//Financial-Fraud-Detection
-   ```
+1. [**Clone the repo and setup environment to run the notebook**](./setup.md)
 <br>
 
-
-
-2. **Obtain NVIDIA Microservices (NIM) API key**
+1. **Obtain NVIDIA Microservices (NIM) API key**
 
 There are two possible methods to generate an API key for NIM:
    - Sign in to the [NVIDIA Build](https://build.nvidia.com/explore/discover?signin=true) portal with your email.
