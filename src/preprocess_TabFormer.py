@@ -48,7 +48,6 @@
 
 import json
 import os
-import pickle
 
 import cudf
 import numpy as np
