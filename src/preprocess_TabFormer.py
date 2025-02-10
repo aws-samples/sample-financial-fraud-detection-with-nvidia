@@ -1,6 +1,6 @@
 # # Credit Card Transaction Data Cleanup and Prep
 #
-# This notebook shows the steps for cleanup and preparing the credit card transaction data for follow on GNN training with GraphSAGE.
+# This source code shows the steps for cleanup and preparing the credit card transaction data for training models with Training NIM.
 #
 # ### The dataset:
 #  * IBM TabFormer: https://github.com/IBM/TabFormer
@@ -62,8 +62,44 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, RobustScaler, StandardScaler
 
 
-# -------
-# #### Define some arguments
+COL_USER = "User"
+COL_CARD = "Card"
+COL_AMOUNT = "Amount"
+COL_MCC = "MCC"
+COL_TIME = "Time"
+COL_DAY = "Day"
+COL_MONTH = "Month"
+COL_YEAR = "Year"
+
+COL_MERCHANT = "Merchant"
+COL_STATE = "State"
+COL_CITY = "City"
+COL_ZIP = "Zip"
+COL_ERROR = "Errors"
+COL_CHIP = "Chip"
+COL_FRAUD = "Fraud"
+COL_TRANSACTION_ID = "Tx_ID"
+COL_MERCHANT_ID = "Merchant_ID"
+COL_USER_ID = "User_ID"
+
+UNKNOWN_STRING_MARKER = "XX"
+UNKNOWN_ZIP_CODE = 0
+
+COL_GRAPH_SRC = "src"
+COL_GRAPH_DST = "dst"
+COL_GRAPH_WEIGHT = "wgt"
+
+
+def cramers_v(x, y):
+    """ "
+    Compute correlation of categorical field x with target y.
+    See https://en.wikipedia.org/wiki/Cram%C3%A9r's_V
+    """
+    confusion_matrix = cudf.crosstab(x, y).to_numpy()
+    chi2 = ss.chi2_contingency(confusion_matrix)[0]
+    n = confusion_matrix.sum().sum()
+    r, k = confusion_matrix.shape
+    return np.sqrt(chi2 / (n * (min(k - 1, r - 1))))
 
 
 def proprocess_data(tabformer_base_path):
@@ -91,58 +127,14 @@ def proprocess_data(tabformer_base_path):
     if not os.path.exists(tabformer_gnn):
         os.makedirs(tabformer_gnn)
 
-    # --------
-    # #### Load and understand the data
-
     # Read the dataset
     data = cudf.read_csv(tabformer_raw_file_path)
 
-    # optional - take a look at the data
-    data.head(5)
-
-    data.columns
-
-    # #### Findings
-    # * Ordinal categorical fields - 'Year', 'Month', 'Day'
-    # * Nominal categorical fields - 'User', 'Card', 'Merchant Name', 'Merchant City', 'Merchant State', 'Zip', 'MCC', 'Errors?'
-    # * Target label - 'Is Fraud?'
-
-    # #### Check if are there Null values in the data
-
-    # Check which fields are missing values
-    data.isnull().sum()
-
-    # Check percentage of missing values
-    100 * data.isnull().sum() / len(data)
-
-    # #### Findings
-    # * For many transactions 'Merchant State' and 'Zip' are missing, but it's good that all of the transactions have 'Merchant City' specified.
-    # * Over 98% of the transactions are missing data for 'Errors?' fields.
-
     # ##### Save a few transactions before any operations on data
 
-    # Write a few raw transactions for model's inference notebook
+    # Write a few raw transactions for model's inference
     out_path = os.path.join(tabformer_xgb, "example_transactions.csv")
     data.tail(10).to_pandas().to_csv(out_path, header=True, index=False)
-
-    # #### Let's rename the column names to single words and use variables for column names to make access easier
-
-    COL_USER = "User"
-    COL_CARD = "Card"
-    COL_AMOUNT = "Amount"
-    COL_MCC = "MCC"
-    COL_TIME = "Time"
-    COL_DAY = "Day"
-    COL_MONTH = "Month"
-    COL_YEAR = "Year"
-
-    COL_MERCHANT = "Merchant"
-    COL_STATE = "State"
-    COL_CITY = "City"
-    COL_ZIP = "Zip"
-    COL_ERROR = "Errors"
-    COL_CHIP = "Chip"
-    COL_FRAUD = "Fraud"
 
     _ = data.rename(
         columns={
@@ -159,9 +151,6 @@ def proprocess_data(tabformer_base_path):
     # #### Handle missing values
     # * Zip codes are numeral, replace missing zip codes by 0
     # * State and Error are string, replace missing values by marker 'XX'
-
-    UNKNOWN_STRING_MARKER = "XX"
-    UNKNOWN_ZIP_CODE = 0
 
     # Make sure that 'XX' doesn't exist in State and Error field before we replace missing values by 'XX'
     assert UNKNOWN_STRING_MARKER not in set(data[COL_STATE].unique().to_pandas())
@@ -186,34 +175,6 @@ def proprocess_data(tabformer_base_path):
     # Drop the "$" from the Amount field and then convert from string to float
     data[COL_AMOUNT] = data[COL_AMOUNT].str.replace("$", "").astype("float")
 
-    data[COL_AMOUNT].describe()
-
-    # #### Let's look into how the Amount differ between fraud and non-fraud transactions
-
-    # Fraud transactions
-    data[COL_AMOUNT][data[COL_FRAUD] == "Yes"].describe()
-
-    # Non-fraud transactions
-    data[COL_AMOUNT][data[COL_FRAUD] == "No"].describe()
-
-    # #### Findings
-    # * 25th percentile = 9.2
-    # * 75th percentile =  65
-    # * Median is around 30 and the mean is around 43 whereas the max value is over 1200 and min value is -500
-    # * Average amount in Fraud transactions > 2x the average amount in Non-Fraud transactions
-    #
-    # We need to scale the data, and RobustScaler could be a good choice for it.
-
-    # #### Now the "Fraud" field
-
-    # How many different categories are there in the COL_FRAUD column?
-    # The hope is that there are only two categories, 'Yes' and 'No'
-    data[COL_FRAUD].unique()
-
-    data[COL_FRAUD].value_counts()
-
-    100 * data[COL_FRAUD].value_counts() / len(data)
-
     # #### Change the 'Fraud' values to be integer where
     #   * 1 == Fraud
     #   * 0 == Non-fraud
@@ -221,42 +182,8 @@ def proprocess_data(tabformer_base_path):
     fraud_to_binary = {"No": 0, "Yes": 1}
     data[COL_FRAUD] = data[COL_FRAUD].map(fraud_to_binary).astype("int8")
 
-    data[COL_FRAUD].value_counts()
-
-    # #### The 'City', 'State', and 'Zip' columns
-
-    # City
-    data[COL_CITY].unique()
-
-    # State
-    data[COL_STATE].unique()
-
-    # Zip
-    data[COL_ZIP].unique()
-
-    # #### The 'Chip' column
-
-
-    data[COL_CHIP].unique()
-
-    # #### The 'Error' column
-
-    data[COL_ERROR].unique()
-
     # Remove ',' in error descriptions
     data[COL_ERROR] = data[COL_ERROR].str.replace(",", "")
-
-    # #### Findings
-    # We can one hot or binary encode columns with fewer categories and binary/hash encode columns with more than 8 categories
-
-    # #### Time
-    # Time is captured as hour:minute.
-    #
-    # We are converting the time to just be the number of minutes.
-    #
-    # time = (hour * 60) + minutes
-
-    data[COL_TIME].describe()
 
     # Split the time column into hours and minutes and then cast to int32
     T = data[COL_TIME].str.split(":", expand=True)
@@ -270,42 +197,15 @@ def proprocess_data(tabformer_base_path):
     # Delete temporary DataFrame
     del T
 
-    # #### Merchant column
-
-    data[COL_MERCHANT]
-
-    # #### Convert the column to str type
-
+    # #### Convert Merchant column to str type
     data[COL_MERCHANT] = data[COL_MERCHANT].astype("str")
-
-    # TOver 100,000 merchants
-    data[COL_MERCHANT].unique()
-
-    # #### The Card column
-    # * "Card 0" for User 1 is different from "Card 0" for User 2.
-    # * Combine User and Card in a way such that (User, Card) combination is unique
-
-    data[COL_CARD].unique()
-
     max_nr_cards_per_user = len(data[COL_CARD].unique())
 
     # Combine User and Card to generate unique numbers
     data[COL_CARD] = data[COL_USER] * len(data[COL_CARD].unique()) + data[COL_CARD]
     data[COL_CARD] = data[COL_CARD].astype("int")
 
-    # #### Define function to compute correlation of different categorical fields with target
-
-    # https://en.wikipedia.org/wiki/Cram%C3%A9r's_V
-
-    def cramers_v(x, y):
-        confusion_matrix = cudf.crosstab(x, y).to_numpy()
-        chi2 = ss.chi2_contingency(confusion_matrix)[0]
-        n = confusion_matrix.sum().sum()
-        r, k = confusion_matrix.shape
-        return np.sqrt(chi2 / (n * (min(k - 1, r - 1))))
-
     # ##### Compute correlation of different fields with target
-
     sparse_factor = 1
     columns_to_compute_corr = [
         COL_CARD,
@@ -369,9 +269,6 @@ def proprocess_data(tabformer_base_path):
     data = data.drop_duplicates(subset=nominal_predictors)
     data = cudf.concat([data, fraud_data])
 
-    # Percentage of fraud and non-fraud cases
-    100 * data[COL_FRAUD].value_counts() / len(data)
-
     # ### Split the data into
     # The data will be split into thee groups based on event date
     #  * Training   - all data before 2018
@@ -390,8 +287,6 @@ def proprocess_data(tabformer_base_path):
     validation_idx = data[COL_YEAR] == 2018
     test_idx = data[COL_YEAR] > 2018
 
-    data[COL_FRAUD].value_counts()
-
     # ### Scale numerical columns and encode categorical columns of training data
 
     # As some of the encoder we want to use is not available in cuml, we can use pandas for now.
@@ -400,11 +295,10 @@ def proprocess_data(tabformer_base_path):
 
     # Use one-hot encoding for columns with <= 8 categories, and binary encoding for columns with more categories
     columns_for_binary_encoding = []
-    columns_for_onehot_encoding = []
+    columns_for_one_hot_encoding = []
     for col in nominal_predictors:
-        print(col, len(data[col].unique()))
         if len(data[col].unique()) <= 8:
-            columns_for_onehot_encoding.append(col)
+            columns_for_one_hot_encoding.append(col)
         else:
             columns_for_binary_encoding.append(col)
 
@@ -420,13 +314,8 @@ def proprocess_data(tabformer_base_path):
             ("binary", BinaryEncoder(handle_missing="value", handle_unknown="value"))
         ]
     )
-    onehot_encoder = Pipeline(steps=[("onehot", OneHotEncoder())])
-    std_scaler = Pipeline(
-        steps=[
-            ("imputer", SimpleImputer(strategy="median")),
-            ("standard", StandardScaler()),
-        ],
-    )
+    one_hot_encoder = Pipeline(steps=[("onehot", OneHotEncoder())])
+
     robust_scaler = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -438,7 +327,7 @@ def proprocess_data(tabformer_base_path):
     transformer = ColumnTransformer(
         transformers=[
             ("binary", bin_encoder, columns_for_binary_encoding),
-            ("onehot", onehot_encoder, columns_for_onehot_encoding),
+            ("onehot", one_hot_encoder, columns_for_one_hot_encoding),
             ("robust", robust_scaler, [COL_AMOUNT]),
         ],
         remainder="passthrough",
@@ -478,21 +367,11 @@ def proprocess_data(tabformer_base_path):
     preprocessed_training_data[COL_FRAUD] = pdf_training[COL_FRAUD].values
     preprocessed_training_data = preprocessed_training_data.astype(type_mapping)
 
-    # Save the transformer
-
-    with open(os.path.join(tabformer_base_path, "preprocessor.pkl"), "wb") as f:
-        pickle.dump(transformer, f)
-
-    # #### Save transformed training data for XGBoost training
-
-    with open(os.path.join(tabformer_base_path, "preprocessor.pkl"), "rb") as f:
-        loaded_transformer = pickle.load(f)
-
     # Transform test data using the transformer fitted on training data
     pdf_test = data[test_idx].to_pandas()[predictor_columns + target_column]
     pdf_test[nominal_predictors] = pdf_test[nominal_predictors].astype("category")
 
-    preprocessed_test_data = loaded_transformer.transform(pdf_test[predictor_columns])
+    preprocessed_test_data = transformer.transform(pdf_test[predictor_columns])
     preprocessed_test_data = pd.DataFrame(
         preprocessed_test_data, columns=columns_of_transformed_data
     )
@@ -507,7 +386,7 @@ def proprocess_data(tabformer_base_path):
         "category"
     )
 
-    preprocessed_validation_data = loaded_transformer.transform(
+    preprocessed_validation_data = transformer.transform(
         pdf_validation[predictor_columns]
     )
     preprocessed_validation_data = pd.DataFrame(
@@ -531,8 +410,6 @@ def proprocess_data(tabformer_base_path):
         columns=columns_of_transformed_data + target_column,
     )
     # preprocessed_training_data.to_parquet(out_path, index=False, compression='gzip')
-
-    preprocessed_training_data.head(5)
 
     ## validation data
     out_path = os.path.join(tabformer_xgb, "validation.csv")
@@ -581,13 +458,10 @@ def proprocess_data(tabformer_base_path):
     data = data[training_idx]
 
     # a lot of process has occurred, sort the data and reset the index
-    data = data.sort_values(by=[COL_YEAR, COL_MONTH, COL_DAY, COL_TIME], ascending=False)
+    data = data.sort_values(
+        by=[COL_YEAR, COL_MONTH, COL_DAY, COL_TIME], ascending=False
+    )
     data.reset_index(inplace=True, drop=True)
-
-    # Each transaction gets a unique ID
-    COL_TRANSACTION_ID = "Tx_ID"
-    COL_MERCHANT_ID = "Merchant_ID"
-    COL_USER_ID = "User_ID"
 
     # The number of transaction is the same as the size of the list, and hence the index value
     data[COL_TRANSACTION_ID] = data.index
@@ -607,7 +481,7 @@ def proprocess_data(tabformer_base_path):
     # Again, get the max merchant ID to compute first user ID
     max_merchant_id = data[COL_MERCHANT_ID].max()
 
-    # ##### NOTE: the 'User' and 'Card' columns of the original data were used to crate updated 'Card' colum
+    # ##### NOTE: the 'User' and 'Card' columns of the original data were used to crate updated 'Card' column
     # * You can use user or card as nodes
 
     # Convert Card to consecutive IDs
@@ -649,10 +523,6 @@ def proprocess_data(tabformer_base_path):
 
     # #### Create the Graph Edge Data file
     # The file is in COO format
-
-    COL_GRAPH_SRC = "src"
-    COL_GRAPH_DST = "dst"
-    COL_GRAPH_WEIGHT = "wgt"
 
     # User to Transactions
     U_2_T = cudf.DataFrame()
@@ -704,13 +574,11 @@ def proprocess_data(tabformer_base_path):
     # #### To get feature vectors of Transaction nodes, transform the training data using pre-fitted transformer
 
     node_feature_df = pd.DataFrame(
-        loaded_transformer.transform(data[predictor_columns].to_pandas()),
+        transformer.transform(data[predictor_columns].to_pandas()),
         columns=columns_of_transformed_data,
     ).astype(type_mapping)
 
     node_feature_df[COL_FRAUD] = data[COL_FRAUD].to_pandas()
-
-    node_feature_df.head(5)
 
     # #### For graph nodes associated with merchant and user, add feature vectors of zeros
 
@@ -856,33 +724,10 @@ def proprocess_data(tabformer_base_path):
     else:
         del empty_feature_df
 
-    # #### Number of transaction nodes in training data
-
     # Number of transaction nodes, needed for GNN training
     nr_transaction_nodes = max_tx_id + 1
-    nr_transaction_nodes
 
-    # #### Maximum number of cards per user
-
-    # Max number of cards per user, needed for inference
-    max_nr_cards_per_user
-
-    # #### Save variable for training and inference
-
-    variables_to_save = {
-        k: v
-        for k, v in globals().items()
-        if isinstance(v, (str, int)) and k.startswith("COL_")
-    }
-
-    variables_to_save["NUM_TRANSACTION_NODES"] = int(nr_transaction_nodes)
-    variables_to_save["MAX_NR_CARDS_PER_USER"] = int(max_nr_cards_per_user)
-
-    # Save the dictionary to a JSON file
-
-    with open(os.path.join(tabformer_base_path, "variables.json"), "w") as json_file:
-        json.dump(variables_to_save, json_file, indent=4)
-
+    # Write NUM_TRANSACTION_NODES in info.json file
     with open(os.path.join(tabformer_gnn, "info.json"), "w") as json_file:
         json.dump(
             {"NUM_TRANSACTION_NODES": int(nr_transaction_nodes)}, json_file, indent=4
