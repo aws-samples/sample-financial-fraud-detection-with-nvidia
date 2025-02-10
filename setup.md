@@ -40,7 +40,7 @@ conda activate notebook_env
 ```
 
 
-## Step 3: Download the datasets
+## Step 3: Download and organize the data
 
 __TabFormer__</br>
 1. Download the dataset: https://ibm.ent.box.com/v/tabformer-data/folder/130747715605
