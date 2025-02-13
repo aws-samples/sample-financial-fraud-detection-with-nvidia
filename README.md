@@ -13,6 +13,8 @@
     - [Obtain API key](#obtain-api-key)
     - [Clone The Repository](#clone-the-repository)
     - [Set up the environment file](#set-up-the-environment-file)
+      - [API Key Environment variable](#api-key-environment-variable)
+      - [Conda Environment](#conda-environment)
     - [Authenticate Docker with NGC](#authenticate-docker-with-ngc)
   - [Running the workflow](#running-the-workflow)
   - [Customizing the Workflow](#customizing-the-workflow)
@@ -79,7 +81,7 @@ This notebook is a simple example of how to orchestrate a financial fraud detect
   - [git](https://git-scm.com/)
   - [Jupyter Notebook or Jupyter Lab](https://jupyter.org/install)
 
-The Notebook contains a cell that install all needed Python packages.
+Additional requiered Python packages are installed in the [conda environment](#conda-environment). 
 
 <br>
 
@@ -108,6 +110,7 @@ IMPORTANT: This will be used in the NVIDIA_API_KEY environment variable below.
 <br>
 
 ### Set up the environment file
+#### API Key Environment variable
    ```bash
    # Create the API environm,ent   
    export NVIDIA_API_KEY=your_key
@@ -117,6 +120,23 @@ Note: The environment variable could also be added to the `.bashrc` file to pers
 ```bash
 echo "export NVIDIA_API_KEY=your_key" >> ~./bashrc
 ```
+
+#### Conda Environment
+The workflow uses Conda to create an environment with all the needed packages. You can get a minimum installation of Conda and Mamba using [Miniforge](https://github.com/conda-forge/miniforge).
+
+Create an environment using the following command, making sure that you are in the `Financial-Fraud-Detection` folder.
+
+```bash
+ mamba env create -f conda/notebook_env.yaml
+```
+
+Finally, activate the environment.
+
+```bash
+conda activate notebook_env
+```
+
+
 
 <br>
 
