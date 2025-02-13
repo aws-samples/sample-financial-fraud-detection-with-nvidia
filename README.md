@@ -3,6 +3,7 @@
 
 ## Table of Contents
 - [Overview](#overview)
+    - [Use Case](#use-case)
     - [Software Components](#software-components)
     - [Target Audience](#target-audience)
     - [Prerequisites](#prerequisites)
@@ -13,11 +14,11 @@
     - [Clone The Repository](#clone-the-repository)
     - [Set up the environment file](#set-up-the-environment-file)
     - [Authenticate Docker with NGC](#authenticate-docker-with-ngc)
-- [Running the workflow](#running-the-workflow)
-- [Customizing the Workflow](#customizing-the-workflow)
-- [Troubleshooting](#troubleshooting)
+  - [Running the workflow](#running-the-workflow)
+  - [Customizing the Workflow](#customizing-the-workflow)
+  - [Troubleshooting](#troubleshooting)
 - [License](#license)
-- [Terms of Use](#terms-of-use)
+  - [Terms of Use](#terms-of-use)
 
 ----
 
@@ -34,6 +35,9 @@ This NVIDIA AI blueprint provides a reference example to detect and prevent soph
 This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps being: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is just a collection of files with synthetic data. Within a production system, the event data would most likely be saved within a database or a data lake. The data os prepared and then feed into the model buulding NIM, called financial-fraud-training.  The output of the NIM folder with all the artifacts needed to be passed to Triton for inference. 
 
 This blueprint does not use any NVIDIA hosted services and runs fully in a self-hosted docker environment.
+
+### Use Case
+See [Use Case](./docs/use_case.md) for a deeper dive into the use cases.
 
 <br>
 
@@ -125,28 +129,59 @@ echo "${NVIDIA_API_KEY}" | docker login nvcr.io -u '$oauthtoken' --password-stdi
 
 <br>
 
-# Running the workflow
+## Running the workflow
+There is no command line option (CLI), unless you understand how to convert a Jupyter Notebok to a Pythin file. But that process is left up to the reader.  
+
+Prerequisite: Start a broweser 
+
+Starting Jupyter
+
+__Option 1:__
+```
+   jupyter notebook 
+```
+
+__Option 2:__
+
+ Starting Jupyter Notebok with the notebook:
+```
+   cd notebook
+   jupyter notebook financial-fraud-nim-usage.ipynb`
+```
+
+__Option 3:__
+
+Starting Jupyter Labs
+```
+jupyter-lab
+
+or 
+
+jupyter-lab --ip=* --no-browser
+```
+
+In either case above, Jupyter will output status information.  One key line is the URL:
+
+```
+$ jupyter notebook
+   ...
+   The Jupyter Notebook is running at: http://localhost:8888/
+```
+
+Via youor browser, connect to the specified URL and process the notebook.
 
 
-# Customizing the Workflow
+## Customizing the Workflow
+The NIM offers a number of custimization option.  Detail on those can be found [here](customize.md).  
 
-# Troubleshooting
+
+## Troubleshooting
+
+
+<br>
 
 # License
-See [license file](./LICENSE)
+By using this software or microservice, you are agreeing to the [terms and conditions](https://www.nvidia.com/en-us/data-center/products/nvidia-ai-enterprise/eula/) of the [license](./LICENSE) and acceptable use policy.
 
-Copyright (c) 2025, NVIDIA CORPORATION.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-
-# Terms of Use
+## Terms of Use
+GOVERNING TERMS: The NIM container is governed by the [NVIDIA Software License Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/) and [Product-Specific Terms for AI Products](https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
