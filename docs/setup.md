@@ -45,10 +45,10 @@ conda activate notebook_env
 __TabFormer__</br>
 1. Download the dataset: https://ibm.ent.box.com/v/tabformer-data/folder/130747715605
 2. untar and uncompreess the file:  `tar -xvzf ./transactions.tgz`
-3. Put `card_transaction.v1.csv` in in the ___"./data/TabFormer/raw"___ folder 
+3. Put `card_transaction.v1.csv` in in the ___"TabFormer/raw"___ folder 
 ```sh
-├── raw
-│   ├── card_transaction.v1.csv
-│   └── README.md
+TabFormer
+    └── raw
+        └── card_transaction.v1.csv
 ```
 
