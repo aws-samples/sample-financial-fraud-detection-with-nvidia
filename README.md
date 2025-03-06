@@ -186,7 +186,7 @@ __Option 2:__
 
 ```bash
    cd notebook
-   jupyter notebook financial-fraud-nim-usage.ipynb`
+   jupyter notebook financial-fraud-nim-usage.ipynb
 ```
 
 __Option 3:__
