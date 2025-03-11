@@ -133,12 +133,16 @@ def proprocess_data(tabformer_base_path):
         tabformer_base_path, "raw", "card_transaction.v1.csv"
     )
     tabformer_xgb = os.path.join(tabformer_base_path, "xgb")
-    tabformer_gnn = os.path.join(tabformer_base_path, "gnn")
+
+    tabformer_nodes = os.path.join(tabformer_base_path, "nodes")
+    tabformer_edges = os.path.join(tabformer_base_path, "edges")
 
     if not os.path.exists(tabformer_xgb):
         os.makedirs(tabformer_xgb)
-    if not os.path.exists(tabformer_gnn):
-        os.makedirs(tabformer_gnn)
+    if not os.path.exists(tabformer_nodes):
+        os.makedirs(tabformer_nodes)
+    if not os.path.exists(tabformer_edges):
+        os.makedirs(tabformer_edges)
 
     # Read the dataset
     data = cudf.read_csv(tabformer_raw_file_path)
@@ -565,12 +569,12 @@ def proprocess_data(tabformer_base_path):
     len(Edge)
 
     # now write out the data
-    out_path = os.path.join(tabformer_gnn, "edges.csv")
+    out_path = os.path.join(tabformer_edges, "node_to_node.csv")
 
     if not os.path.exists(os.path.dirname(out_path)):
         os.makedirs(os.path.dirname(out_path))
 
-    Edge.to_csv(out_path, header=False, index=False)
+    Edge.to_csv(out_path, header=True, index=False)
 
     del Edge
     del U_2_T
@@ -708,23 +712,22 @@ def proprocess_data(tabformer_base_path):
     # #### Write out node features and target labels
 
     # Write node target label to csv file
-    out_path = os.path.join(tabformer_gnn, "labels.csv")
+    out_path = os.path.join(tabformer_nodes, "node_label.csv")
 
     if not os.path.exists(os.path.dirname(out_path)):
         os.makedirs(os.path.dirname(out_path))
 
-    label_df.to_csv(out_path, header=False, index=False)
+    label_df.to_csv(out_path, header=True, index=False)
     # label_df.to_parquet(out_path, index=False, compression='gzip')
 
     # Write node features to csv file
-    out_path = os.path.join(tabformer_gnn, "features.csv")
+    out_path = os.path.join(tabformer_nodes, "node.csv")
 
     if not os.path.exists(os.path.dirname(out_path)):
         os.makedirs(os.path.dirname(out_path))
     node_feature_df[columns_of_transformed_data].to_csv(
         out_path, header=True, index=False
     )
-    # node_feature_df.to_parquet(out_path, index=False, compression='gzip')
 
     # Delete dataFrames
     del data
@@ -741,7 +744,7 @@ def proprocess_data(tabformer_base_path):
     nr_transaction_nodes = max_tx_id + 1
 
     # Write NUM_TRANSACTION_NODES in info.json file
-    with open(os.path.join(tabformer_gnn, "info.json"), "w") as json_file:
-        json.dump(
-            {"NUM_TRANSACTION_NODES": int(nr_transaction_nodes)}, json_file, indent=4
-        )
+    with open(
+        os.path.join(tabformer_nodes, "offset_range_of_training_node.json"), "w"
+    ) as json_file:
+        json.dump({"start": 0, "end": int(max_tx_id)}, json_file, indent=4)
