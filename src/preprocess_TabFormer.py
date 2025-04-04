@@ -115,7 +115,34 @@ def cramers_v(x, y):
     return np.sqrt(chi2 / (n * (min(k - 1, r - 1))))
 
 
-def proprocess_data(tabformer_base_path):
+def create_feature_mask(columns):
+    # Dictionary to store mapping from original column to mask value
+    mask_mapping = {}
+    mask_values = []
+    current_mask = 0
+
+    for col in columns:
+        # For encoded columns, assume the base is before the underscore
+        if "_" in col:
+            base_feature = col.split("_")[0]
+        else:
+            base_feature = col  # For non-encoded columns, use the column name directly
+
+        # Assign a new mask value if this base feature hasn't been seen before
+        if base_feature not in mask_mapping:
+            mask_mapping[base_feature] = current_mask
+            current_mask += 1
+
+        # Append the mask value for this column
+        mask_values.append(mask_mapping[base_feature])
+
+    # Convert list to numpy array for further processing if needed
+    feature_mask = np.array(mask_values)
+
+    return mask_mapping, feature_mask
+
+
+def preprocess_data(tabformer_base_path):
 
     # Whether the graph is undirected
     make_undirected = True
@@ -748,3 +775,5 @@ def proprocess_data(tabformer_base_path):
         os.path.join(tabformer_nodes, "offset_range_of_training_node.json"), "w"
     ) as json_file:
         json.dump({"start": 0, "end": int(max_tx_id)}, json_file, indent=4)
+
+    return create_feature_mask(columns_of_transformed_data)
