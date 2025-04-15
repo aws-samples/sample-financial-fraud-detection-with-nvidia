@@ -1,9 +1,9 @@
 
 # Downloading the Test Data
 
-The origin of the test data this [TabFormer git repository](https://github.com/IBM/TabFormer/tree/main/data/credit_card). The problem is that it is generally not downloadable from this location as it is a large file and is stored / retrieved using git-lfs. Due to the popularity of the file it is generally not able to be downloaded here. As such, the owners of that repository have made the dataset available via [Box](https://ibm.box.com/v/tabformer-data).
+The origin of the test data is [TabFormer git repository](https://github.com/IBM/TabFormer/tree/main/data/credit_card). The file is generally not downloadable from this location because of size and the use of [git-lfs](https://git-lfs.com/). We recommend downloading dataset via [Box](https://ibm.box.com/v/tabformer-data).
 
-While this makes it fairly easy to retrieve the file for local use, it does make it a little more difficult to retrieve for the sakes of testing in a container as this application expects. So, there are a few steps to follow to get a download link that you can put into the download box.
+While this makes it fairly easy to retrieve the file for local use, it does make it a little more difficult to retrieve for testing in a container as this application expects. So, there are a few steps to get a download link for inserting in the download box.
 
 ## Step 1
 

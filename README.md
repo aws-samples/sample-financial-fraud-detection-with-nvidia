@@ -31,13 +31,13 @@ __Notice__: This README is for users running the notebook locally and makes assu
 
 # Overview
 
-Transaction fraud detection is a [$43B problem annually](https://nilsonreport.com/articles/card-fraud-losses-worldwide-2/) and poses a big challenge for financial institutions to detect and prevent sophisticated fraudulent activities. Traditional fraud detection methods, which rely on rules-based systems, or statistical methods, are reactive and increasingly ineffective in identifying sophisticated fraudulent activities. As data volumes grow and fraud tactics evolve, financial institutions need more proactive, intelligent approaches to detect and prevent fraudulent transactions. 
+Transaction fraud is a [forty-three billion dollar problem annually](https://nilsonreport.com/articles/card-fraud-losses-worldwide-2/). It poses a major challenge for financial institutions which struggle to detect and prevent increasingly complicated fraudulent activities. Traditional fraud detection methods, which rely on rules-based systems, or statistical methods, are reactive and increasingly ineffective in identifying sophisticated fraudulent activities. As data volumes grow and fraud tactics evolve, systems need more proactive, intelligent approaches to detect and prevent fraudulent transactions.
 
-This NVIDIA AI blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a Financial Fraud Detection workflow using NVIDIA NIM microservices for fraud detection. The model building NIM augments fraud detection using graph neural networks (GNN's), a deep learning technique, for improved accuracy. Inference is done using the NVIDIA Triton NIM which produces fraud scores along with Shapely values containing explanations.
+This NVIDIA AI blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a Financial Fraud Detection workflow using NVIDIA NIM microservices for fraud detection. The model-building NIM augments fraud detection using graph neural networks (GNN's), a deep learning technique, for improved accuracy. Inference is done using the NVIDIA Dynamo Triton (formerly Triton Inference Server) NIM which produces fraud scores along with [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) containing explanations.
 
 <img width="1000" alt="Architecture Diagram" src="docs/financial-fraud-bp.png"/>
 
-This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (NEED LINK TO DOCs) model building NIM. The output of the NIM folder with all the artifacts needs to be passed to Triton for inference.
+This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (NEED LINK TO DOCs) model-building NIM. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo Triton for inference.
 
 This blueprint does not use any NVIDIA hosted services and runs fully in a locally hosted docker environment.
 
@@ -48,7 +48,7 @@ This blueprint does not use any NVIDIA hosted services and runs fully in a local
 The following software components are used:
 
 - financial-fraud-training (LINK to NGC when ready)
-- [Triton Inference Server](https://developer.nvidia.com/triton-inference-server)
+- [NVIDIA Dynamo Triton](https://developer.nvidia.com/dynamo)
 
 Everything is run via a Jupyter Notebook.
 
