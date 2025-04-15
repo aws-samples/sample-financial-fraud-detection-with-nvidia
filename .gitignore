@@ -1,6 +1,8 @@
 # datasets
 data/*
+
 !data/readme.md
+!data/TabFormer/raw/readme.md
 
 # checkpoint
 .ipynb_checkpoints
