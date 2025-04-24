@@ -2,7 +2,7 @@
 
 ## New Features
 
-- ...
+- Initial version
 
 ## Improvements
 
