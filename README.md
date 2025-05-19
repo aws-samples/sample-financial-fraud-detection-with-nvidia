@@ -33,14 +33,14 @@ __Notice__: This README is for users running the notebook locally and makes assu
 
 Transaction fraud is a [$43 billion problem annually](https://nilsonreport.com/articles/card-fraud-losses-worldwide-2/). It poses a major challenge for financial institutions which struggle to detect and prevent increasingly complicated fraudulent activities. Traditional fraud detection methods, which rely on rules-based systems, or statistical methods, are reactive and increasingly ineffective in identifying sophisticated fraudulent activities. As data volumes grow and fraud tactics evolve, systems need more proactive, intelligent approaches to detect and prevent fraudulent transactions.
 
-This NVIDIA AI blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a Financial Fraud Detection workflow using NVIDIA containers for fraud detection. The model-building container augments fraud detection using graph neural networks (GNN's), a deep learning technique, for improved accuracy. Inference is done using the [NVIDIA Dynamo](https://developer.nvidia.com/dynamo) (formerly Triton Inference Server) which produces fraud scores along with [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) containing explanations.
+This NVIDIA AI blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a Financial Fraud Detection workflow using NVIDIA containers for fraud detection. The model-building container augments fraud detection using graph neural networks (GNN's), a deep learning technique, for improved accuracy. Inference is done using the [NVIDIA Dynamo-Triton](https://developer.nvidia.com/dynamo) which produces fraud scores along with [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) containing explanations.
 
 <img width="1000" alt="Architecture Diagram" src="docs/financial-fraud-bp.png"/>
 
 ___PICTURE NEEDS TO BE UPDATED___
 
 
-This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (__NEED LINK TO DOCs__) model-building container. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo for inference.
+This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (__NEED LINK TO DOCs__) model-building container. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo-Triton for inference.
 
 This blueprint does not use any NVIDIA hosted services and runs fully in a locally hosted docker environment.
 
@@ -51,7 +51,7 @@ This blueprint does not use any NVIDIA hosted services and runs fully in a local
 The following software components are used:
 
 - financial-fraud-training (LINK to NGC when ready)
-- [NVIDIA Dynamo](https://developer.nvidia.com/dynamo)
+- [NVIDIA Dynamo-Triton](https://developer.nvidia.com/dynamo)
 
 Everything is run via a Jupyter Notebook.
 
