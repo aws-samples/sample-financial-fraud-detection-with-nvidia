@@ -67,12 +67,13 @@ import cudf
 import numpy as np
 import pandas as pd
 import scipy.stats as ss
+from scipy.linalg import block_diag
 from category_encoders import BinaryEncoder
 from scipy.stats import pointbiserialr
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, RobustScaler, StandardScaler
+from sklearn.preprocessing import OneHotEncoder, RobustScaler
 
 
 COL_USER = "User"
@@ -101,7 +102,12 @@ UNKNOWN_ZIP_CODE = 0
 COL_GRAPH_SRC = "src"
 COL_GRAPH_DST = "dst"
 COL_GRAPH_WEIGHT = "wgt"
+MERCHANT_AND_USER_COLS = [COL_MERCHANT, COL_CARD, COL_MCC]
 
+
+
+# https://en.wikipedia.org/wiki/Point-biserial_correlation_coefficient
+# Use Point-biserial correlation coefficient(rpb) to check if the numerical columns are important to predict if a transaction is fraud
 
 def cramers_v(x, y):
     """ "
@@ -113,7 +119,6 @@ def cramers_v(x, y):
     n = confusion_matrix.sum().sum()
     r, k = confusion_matrix.shape
     return np.sqrt(chi2 / (n * (min(k - 1, r - 1))))
-
 
 def create_feature_mask(columns):
     # Dictionary to store mapping from original column to mask value
@@ -142,13 +147,8 @@ def create_feature_mask(columns):
     return mask_mapping, feature_mask
 
 
+
 def preprocess_data(tabformer_base_path):
-
-    # Whether the graph is undirected
-    make_undirected = True
-
-    # Whether to spread features across Users and Merchants nodes
-    spread_features = False
 
     # Whether we should under-sample majority class (i.e. non-fraud transactions)
     under_sample = True
@@ -160,25 +160,23 @@ def preprocess_data(tabformer_base_path):
         tabformer_base_path, "raw", "card_transaction.v1.csv"
     )
     tabformer_xgb = os.path.join(tabformer_base_path, "xgb")
+    tabformer_gnn = os.path.join(tabformer_base_path, "gnn")
 
-    tabformer_nodes = os.path.join(tabformer_base_path, "nodes")
-    tabformer_edges = os.path.join(tabformer_base_path, "edges")
 
     if not os.path.exists(tabformer_xgb):
         os.makedirs(tabformer_xgb)
-    if not os.path.exists(tabformer_nodes):
-        os.makedirs(tabformer_nodes)
-    if not os.path.exists(tabformer_edges):
-        os.makedirs(tabformer_edges)
+    if not os.path.exists(tabformer_gnn):
+        os.makedirs(tabformer_gnn)
 
     # Read the dataset
     data = cudf.read_csv(tabformer_raw_file_path)
 
     # ##### Save a few transactions before any operations on data
 
-    # Write a few raw transactions for model's inference
-    out_path = os.path.join(tabformer_xgb, "example_transactions.csv")
-    data.tail(10).to_pandas().to_csv(out_path, header=True, index=False)
+    # # Write a few raw transactions for model's inference
+    # out_path = os.path.join(tabformer_xgb, "example_transactions.csv")
+    # data.tail(10).to_pandas().to_csv(out_path, header=True, index=False)
+
 
     _ = data.rename(
         columns={
@@ -211,6 +209,7 @@ def preprocess_data(tabformer_base_path):
 
     # There shouldn't be any missing values in the data now.
     assert data.isnull().sum().sum() == 0
+
 
     # ### Clean up the Amount field
     # * Drop the "$" from the Amount field and then convert from string to float
@@ -245,10 +244,79 @@ def preprocess_data(tabformer_base_path):
     data[COL_MERCHANT] = data[COL_MERCHANT].astype("str")
     max_nr_cards_per_user = len(data[COL_CARD].unique())
 
+
     # Combine User and Card to generate unique numbers
     data[COL_CARD] = data[COL_USER] * len(data[COL_CARD].unique()) + data[COL_CARD]
     data[COL_CARD] = data[COL_CARD].astype("int")
 
+
+    # Collect unique merchant, card and MCC in a dataframe and fit a binary transformer
+    data = data.to_pandas()
+
+    data_ids = pd.DataFrame()
+
+    nr_unique_card = data[COL_CARD].unique().shape[0]
+    nr_unique_merchant = data[COL_MERCHANT].unique().shape[0]
+    nr_unique_mcc = data[COL_MCC].unique().shape[0] 
+    nr_elements =  max(nr_unique_merchant, nr_unique_card)
+
+    data_ids[COL_CARD] =  [data[COL_CARD][0]] * nr_elements
+    data_ids[COL_MERCHANT] = [data[COL_MERCHANT][0]] * nr_elements
+    data_ids[COL_MCC] = [data[COL_MCC][0]] * nr_elements
+
+
+    data_ids.loc[np.arange(nr_unique_card), COL_CARD] = data[COL_CARD].unique()
+    data_ids.loc[np.arange(nr_unique_merchant), COL_MERCHANT] = data[COL_MERCHANT].unique()
+    data_ids.loc[np.arange(nr_unique_mcc), COL_MCC] = data[COL_MCC].unique()
+
+    data_ids = data_ids[MERCHANT_AND_USER_COLS].astype('category')
+
+
+    id_bin_encoder = Pipeline(
+        steps=[
+            ("binary", BinaryEncoder(handle_missing="value", handle_unknown="value"))
+        ]
+    )
+
+    id_transformer = ColumnTransformer(
+        transformers=[
+            ("binary", id_bin_encoder, MERCHANT_AND_USER_COLS),
+        ],
+        remainder="passthrough",
+    )
+
+    pd.set_option("future.no_silent_downcasting", True)
+    id_transformer = id_transformer.fit(data_ids)
+
+
+    preprocessed_id_data_raw = id_transformer.transform(data[MERCHANT_AND_USER_COLS].astype('category'))
+
+    # transformed column names
+    columns_of_transformed_id_data = list(
+        map(
+            lambda name: name.split("__")[1],
+            list(id_transformer.get_feature_names_out(MERCHANT_AND_USER_COLS)),
+        )
+    )
+
+    # data type of transformed columns
+    id_col_type_mapping = {}
+    for col in columns_of_transformed_id_data:
+        if col.split("_")[0] in MERCHANT_AND_USER_COLS:
+            id_col_type_mapping[col] = "int8"
+
+
+    assert data_ids.isnull().sum().sum() == 0
+
+    preprocessed_id_data = pd.DataFrame(
+        preprocessed_id_data_raw, columns=columns_of_transformed_id_data
+    )
+
+    data_wth_original_ids = pd.concat([data, preprocessed_id_data], axis=1)
+    data = data.reset_index(drop=True)
+    data_wth_original_ids =  pd.concat([data.reset_index(drop=True), preprocessed_id_data.reset_index(drop=True)], axis=1)
+    data = data_wth_original_ids.copy()
+    
     # ##### Compute correlation of different fields with target
     sparse_factor = 1
     columns_to_compute_corr = [
@@ -272,23 +340,13 @@ def preprocess_data(tabformer_base_path):
 
     # ### Correlation of target with numerical columns
 
-    # https://en.wikipedia.org/wiki/Point-biserial_correlation_coefficient
-    # Use Point-biserial correlation coefficient(rpb) to check if the numerical columns are important to predict if a transaction is fraud
-
     for col in [COL_TIME, COL_AMOUNT]:
         r_pb, p_value = pointbiserialr(
-            data[COL_FRAUD].to_pandas(), data[col].to_pandas()
+            # data[COL_FRAUD].to_pandas(), data[col].to_pandas()
+            data[COL_FRAUD], data[col]
         )
         print("r_pb ({}) = {:3.2f} with p_value {:3.2f}".format(col, r_pb, p_value))
 
-    # ### Findings
-    # * Clearly, Time is not an important predictor
-    # * Amount has 3% correlation with target
-
-    # #### Based on correlation, select a set of columns (aka fields) to predict whether a transaction is fraud
-
-    # As the cross correlation of Fraud with Day, Month, Year is significantly lower,
-    # we can skip them for now and add these features later.
 
     numerical_predictors = [COL_AMOUNT]
     nominal_predictors = [
@@ -302,16 +360,21 @@ def preprocess_data(tabformer_base_path):
     ]
 
     predictor_columns = numerical_predictors + nominal_predictors
-
     target_column = [COL_FRAUD]
 
     # #### Remove duplicates non-fraud data points
 
     # Remove duplicates data points
-    fraud_data = data[data[COL_FRAUD] == 1]
+    fraud_data = data[data[COL_FRAUD] == 1].copy()
     data = data[data[COL_FRAUD] == 0]
+
+    # ### Remove duplicates
+    data = data.reset_index(drop=True)
+    fraud_data = fraud_data.reset_index(drop=True)
+
     data = data.drop_duplicates(subset=nominal_predictors)
-    data = cudf.concat([data, fraud_data])
+    data = pd.concat([data, fraud_data])
+
 
     # ### Split the data into
     # The data will be split into thee groups based on event date
@@ -325,7 +388,14 @@ def preprocess_data(tabformer_base_path):
         nr_non_fraud_samples = min(
             (len(data) - len(fraud_df)), int(len(fraud_df) / fraud_ratio)
         )
-        data = cudf.concat([fraud_df, non_fraud_df.sample(nr_non_fraud_samples)])
+        data = pd.concat([fraud_df, non_fraud_df.sample(nr_non_fraud_samples)])
+
+
+    predictor_columns = list(set(predictor_columns) - set(MERCHANT_AND_USER_COLS))
+    nominal_predictors = list(set(nominal_predictors) - set(MERCHANT_AND_USER_COLS))
+
+
+    data = data.reset_index(drop=True)
 
     training_idx = data[COL_YEAR] < 2018
     validation_idx = data[COL_YEAR] == 2018
@@ -335,7 +405,7 @@ def preprocess_data(tabformer_base_path):
 
     # As some of the encoder we want to use is not available in cuml, we can use pandas for now.
     # Move training data to pandas for preprocessing
-    pdf_training = data[training_idx].to_pandas()[predictor_columns + target_column]
+    pdf_training = data[training_idx][predictor_columns + target_column]
 
     # Use one-hot encoding for columns with <= 8 categories, and binary encoding for columns with more categories
     columns_for_binary_encoding = []
@@ -346,6 +416,9 @@ def preprocess_data(tabformer_base_path):
         else:
             columns_for_binary_encoding.append(col)
 
+
+    assert (training_idx.sum() + validation_idx.sum() + test_idx.sum()) ==  data.shape[0]
+    
     # Mark categorical column as "category"
     pdf_training[nominal_predictors] = pdf_training[nominal_predictors].astype(
         "category"
@@ -377,6 +450,7 @@ def preprocess_data(tabformer_base_path):
         remainder="passthrough",
     )
 
+
     # Fit column transformer with training data
 
     pd.set_option("future.no_silent_downcasting", True)
@@ -407,12 +481,10 @@ def preprocess_data(tabformer_base_path):
     preprocessed_training_data = pd.DataFrame(
         preprocessed_training_data, columns=columns_of_transformed_data
     )
-    # Copy target column
-    preprocessed_training_data[COL_FRAUD] = pdf_training[COL_FRAUD].values
-    preprocessed_training_data = preprocessed_training_data.astype(type_mapping)
+
 
     # Transform test data using the transformer fitted on training data
-    pdf_test = data[test_idx].to_pandas()[predictor_columns + target_column]
+    pdf_test = data[test_idx][predictor_columns + target_column]
     pdf_test[nominal_predictors] = pdf_test[nominal_predictors].astype("category")
 
     preprocessed_test_data = transformer.transform(pdf_test[predictor_columns])
@@ -420,12 +492,9 @@ def preprocess_data(tabformer_base_path):
         preprocessed_test_data, columns=columns_of_transformed_data
     )
 
-    # Copy target column
-    preprocessed_test_data[COL_FRAUD] = pdf_test[COL_FRAUD].values
-    preprocessed_test_data = preprocessed_test_data.astype(type_mapping)
 
     # Transform validation data using the transformer fitted on training data
-    pdf_validation = data[validation_idx].to_pandas()[predictor_columns + target_column]
+    pdf_validation = data[validation_idx][predictor_columns + target_column]
     pdf_validation[nominal_predictors] = pdf_validation[nominal_predictors].astype(
         "category"
     )
@@ -437,11 +506,26 @@ def preprocess_data(tabformer_base_path):
         preprocessed_validation_data, columns=columns_of_transformed_data
     )
 
-    # Copy target column
-    preprocessed_validation_data[COL_FRAUD] = pdf_validation[COL_FRAUD].values
-    preprocessed_validation_data = preprocessed_validation_data.astype(type_mapping)
+
+    preprocessed_id_data_train = pd.DataFrame(
+        id_transformer.transform(data[training_idx][MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )
+    preprocessed_training_data = pd.concat([preprocessed_training_data, preprocessed_id_data_train], axis=1)
+
+
+
 
     # ## Write out the data for XGB
+
+
+    # Copy target column
+    preprocessed_training_data[COL_FRAUD] = pdf_training[COL_FRAUD].values
+    preprocessed_training_data = preprocessed_training_data.astype(type_mapping)
+
+
+    assert preprocessed_training_data.columns[-1] == COL_FRAUD
+    assert set(preprocessed_training_data.columns) - set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) == set()
+    assert set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) - set(preprocessed_training_data.columns) == set()
 
     ## Training data
     out_path = os.path.join(tabformer_xgb, "training.csv")
@@ -451,9 +535,24 @@ def preprocess_data(tabformer_base_path):
         out_path,
         header=True,
         index=False,
-        columns=columns_of_transformed_data + target_column,
+        columns= preprocessed_training_data.columns,
     )
-    # preprocessed_training_data.to_parquet(out_path, index=False, compression='gzip')
+
+
+    preprocessed_id_data_val = pd.DataFrame(
+        id_transformer.transform(data[validation_idx][MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )
+    preprocessed_validation_data = pd.concat([preprocessed_validation_data, preprocessed_id_data_val], axis=1)
+
+    # Copy target column
+    preprocessed_validation_data[COL_FRAUD] = pdf_validation[COL_FRAUD].values
+    preprocessed_validation_data = preprocessed_validation_data.astype(type_mapping)
+
+
+    assert preprocessed_validation_data.columns[-1] == COL_FRAUD
+    assert set(preprocessed_validation_data.columns) - set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) == set()
+    assert set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) - set(preprocessed_validation_data.columns) == set()
+
 
     ## validation data
     out_path = os.path.join(tabformer_xgb, "validation.csv")
@@ -463,9 +562,29 @@ def preprocess_data(tabformer_base_path):
         out_path,
         header=True,
         index=False,
-        columns=columns_of_transformed_data + target_column,
+        columns= preprocessed_validation_data.columns,
     )
     # preprocessed_validation_data.to_parquet(out_path, index=False, compression='gzip')
+
+
+
+
+    preprocessed_id_data_test = pd.DataFrame(
+        id_transformer.transform(data[test_idx][MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )
+    preprocessed_test_data = pd.concat([preprocessed_test_data, preprocessed_id_data_test], axis=1)
+
+
+    # Copy target column
+    preprocessed_test_data[COL_FRAUD] = pdf_test[COL_FRAUD].values
+    preprocessed_test_data = preprocessed_test_data.astype(type_mapping)
+
+
+
+    assert preprocessed_test_data.columns[-1] == COL_FRAUD
+    assert set(preprocessed_test_data.columns) - set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) == set()
+    assert set(columns_of_transformed_data + columns_of_transformed_id_data  + target_column) - set(preprocessed_test_data.columns) == set()
+
 
     ## test data
     out_path = os.path.join(tabformer_xgb, "test.csv")
@@ -473,13 +592,16 @@ def preprocess_data(tabformer_base_path):
         out_path,
         header=True,
         index=False,
-        columns=columns_of_transformed_data + target_column,
+        columns= preprocessed_test_data.columns,
     )
     # preprocessed_test_data.to_parquet(out_path, index=False, compression='gzip')
 
-    # Write untransformed test data that has only (renamed) predictor columns and target
-    out_path = os.path.join(tabformer_xgb, "untransformed_test.csv")
-    pdf_test.to_csv(out_path, header=True, index=False)
+    # # Write untransformed test data that has only (renamed) predictor columns and target
+    # out_path = os.path.join(tabformer_xgb, "untransformed_test.csv")
+    # pdf_test.to_csv(out_path, header=True, index=False)
+
+
+
 
     # Delete dataFrames that are not needed anymore
     del pdf_training
@@ -488,6 +610,9 @@ def preprocess_data(tabformer_base_path):
     del preprocessed_training_data
     del preprocessed_validation_data
     del preprocessed_test_data
+
+
+
 
     # ### GNN Data
 
@@ -499,48 +624,245 @@ def preprocess_data(tabformer_base_path):
     # This IDs are not used in training, just used for graph processing.
 
     # Use the same training data as used for XGBoost
-    data = data[training_idx]
 
-    # a lot of process has occurred, sort the data and reset the index
-    data = data.sort_values(
-        by=[COL_YEAR, COL_MONTH, COL_DAY, COL_TIME], ascending=False
-    )
+
+    data_all = data.copy()
+    data = pd.concat( [data[training_idx].reset_index(drop=True), data[validation_idx].reset_index(drop=True)])
     data.reset_index(inplace=True, drop=True)
 
     # The number of transaction is the same as the size of the list, and hence the index value
     data[COL_TRANSACTION_ID] = data.index
 
-    # Get the max transaction ID to compute first merchant ID
-    max_tx_id = data[COL_TRANSACTION_ID].max()
+    merchant_name_to_id =  dict( zip(data[COL_MERCHANT].unique(), np.arange(len(data[COL_MERCHANT].unique()))) )
 
-    # Convert Merchant string to consecutive integers
-    merchant_name_to_id = dict(
-        (v, k) for k, v in data[COL_MERCHANT].unique().to_dict().items()
-    )
-    data[COL_MERCHANT_ID] = data[COL_MERCHANT].map(merchant_name_to_id) + (
-        max_tx_id + 1
-    )
-    data[COL_MERCHANT_ID].min(), data[COL_MERCHANT].max()
-
-    # Again, get the max merchant ID to compute first user ID
-    max_merchant_id = data[COL_MERCHANT_ID].max()
+    data[COL_MERCHANT_ID] = data[COL_MERCHANT].map(merchant_name_to_id)
 
     # ##### NOTE: the 'User' and 'Card' columns of the original data were used to crate updated 'Card' column
     # * You can use user or card as nodes
 
+    id_to_consecutive_id =  dict( zip(data[COL_CARD].unique(), np.arange(len(data[COL_CARD].unique()))))
+
     # Convert Card to consecutive IDs
-    id_to_consecutive_id = dict(
-        (v, k) for k, v in data[COL_CARD].unique().to_dict().items()
+    data[COL_USER_ID] = data[COL_CARD].map(id_to_consecutive_id)
+
+    NR_USERS = data[COL_USER_ID].max() + 1
+    NR_MXS = data[COL_MERCHANT_ID].max() + 1
+    NR_TXS = data[COL_TRANSACTION_ID].max() +1
+
+    # Check the the transaction, merchant and user ids are consecutive
+    id_range = data[COL_TRANSACTION_ID].min(), data[COL_TRANSACTION_ID].max()
+    print(f"Transaction ID range {id_range}")
+    id_range = data[COL_MERCHANT_ID].min(), data[COL_MERCHANT_ID].max()
+    print(f"Merchant ID range {id_range}") 
+    id_range = data[COL_USER_ID].min(), data[COL_USER_ID].max()
+    print(f"User ID range {id_range}")
+
+
+
+    # ### Write out the data for GNN
+
+    # #### Create the Graph Edge Data file
+    # The file is in COO format
+
+    # User to Merchants
+    U_2_T = cudf.DataFrame()
+    U_2_T[COL_GRAPH_SRC] = data[COL_USER_ID]
+    U_2_T[COL_GRAPH_DST] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+
+    T_2_M = cudf.DataFrame()
+    T_2_M[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+    T_2_M[COL_GRAPH_DST] = data[COL_MERCHANT_ID] + NR_USERS
+
+    T_2_U = cudf.DataFrame()
+    T_2_U[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+    T_2_U[COL_GRAPH_DST] = data[COL_USER_ID]
+
+    M_2_T = cudf.DataFrame()
+    M_2_T[COL_GRAPH_SRC] = data[COL_MERCHANT_ID] + NR_USERS 
+    M_2_T[COL_GRAPH_DST] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+        
+    Edge =  cudf.concat([U_2_T, T_2_M, T_2_U, M_2_T])
+
+
+    # Write out the data
+    out_path = os.path.join(tabformer_gnn, "edges/node_to_node.csv")
+
+    if not os.path.exists(os.path.dirname(out_path)):
+        os.makedirs(os.path.dirname(out_path))
+
+    Edge.to_csv(out_path, header=True, index=False)
+
+
+    # ### Now the feature data
+    # Feature data needs to be is sorted in order, where the row index corresponds to the node ID
+    #
+    # The data is comprised of three sets of features
+    # * Transactions
+    # * Merchants
+    # * Users
+
+    # #### To get feature vectors of Transaction nodes, transform the training data using pre-fitted transformer
+
+    transaction_feature_df = pd.DataFrame(
+        transformer.transform(data[predictor_columns]),
+        columns=columns_of_transformed_data,
+    ).astype(type_mapping)
+
+    transaction_feature_df[COL_FRAUD] = data[COL_FRAUD]
+
+
+    data_merchant =  data[[COL_MERCHANT, COL_MCC, COL_CARD ]].drop_duplicates(subset=[COL_MERCHANT]).reset_index(drop=True)
+
+    data_user =  data[[COL_MERCHANT, COL_MCC, COL_CARD ]].drop_duplicates(subset=[COL_CARD]).reset_index(drop=True)
+
+    data_merchant[COL_MERCHANT_ID] =  data_merchant[COL_MERCHANT].map(merchant_name_to_id)
+
+    data_merchant_sorted =  data_merchant.sort_values(by=COL_MERCHANT_ID)
+
+    data_user[COL_USER_ID] = data_user[COL_CARD].map(id_to_consecutive_id)
+
+    data_user_sorted = data_user.sort_values(by=COL_USER_ID)
+
+
+    user_feature_columns = []
+    mx_feature_columns = []
+    for c in columns_of_transformed_id_data:
+        if c.startswith('Card'):
+            user_feature_columns.append(c)
+        else:
+            mx_feature_columns.append(c)
+
+
+    preprocessed_merchant_data = pd.DataFrame(
+        id_transformer.transform(data_merchant_sorted[MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )[mx_feature_columns]
+
+    preprocessed_user_data = pd.DataFrame(
+    id_transformer.transform(data_user_sorted[MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )[user_feature_columns]
+
+
+
+
+    # out_path = os.path.join(tabformer_gnn, "nodes/user.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+        
+    # preprocessed_user_data.to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= user_feature_columns)
+
+
+    # out_path = os.path.join(tabformer_gnn, "nodes/merchant.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # preprocessed_merchant_data.to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= mx_feature_columns)
+
+
+
+    # out_path = os.path.join(tabformer_gnn, "edges/user_to_merchant_label.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # transaction_feature_df[[COL_FRAUD]].to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= [COL_FRAUD])
+
+
+
+    # out_path = os.path.join(tabformer_gnn, "edges/user_to_merchant_attr.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # transaction_feature_df[columns_of_transformed_data].to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= columns_of_transformed_data)
+
+    U = preprocessed_user_data.values
+    M = preprocessed_merchant_data.values
+    T = transaction_feature_df[columns_of_transformed_data].values
+
+    combined_cols =  user_feature_columns + mx_feature_columns + columns_of_transformed_data
+
+    node_feature_df = pd.DataFrame(
+        block_diag(U, M, T),
+        columns= combined_cols
     )
-    data[COL_USER_ID] = data[COL_CARD].map(id_to_consecutive_id) + max_merchant_id + 1
-    data[COL_USER_ID].min(), data[COL_USER_ID].max()
 
-    # id_to_consecutive_id = dict((v, k) for k, v in data[COL_USER].unique().to_dict().items())
-    # data[COL_USER_ID] = data[COL_USER].map(id_to_consecutive_id) + max_merchant_id + 1
-    # data[COL_USER_ID].min(), data[COL_USER].max()
+    assert COL_FRAUD  not in (list(preprocessed_user_data.columns) +  list(preprocessed_merchant_data.columns) + columns_of_transformed_data)
 
-    # Save the max user ID
-    max_user_id = data[COL_USER_ID].max()
+    out_path = os.path.join(tabformer_gnn, "nodes/node.csv")
+    if not os.path.exists(os.path.dirname(out_path)):
+        os.makedirs(os.path.dirname(out_path))
+    node_feature_df.to_csv(
+        out_path,
+        header=True,
+        index=False,
+        columns= combined_cols)
+
+
+    # Initialize with all zeros
+    node_label_df = pd.DataFrame(
+        np.zeros(len(node_feature_df), dtype=int), columns=[COL_FRAUD]
+    )
+
+    # Copy the label of transaction nodes to corresponding indices
+    node_label_df.iloc[NR_USERS + NR_MXS : NR_USERS + NR_MXS + NR_TXS, 0] = transaction_feature_df[COL_FRAUD].values
+
+
+    out_path = os.path.join(tabformer_gnn, "nodes/node_label.csv")
+    if not os.path.exists(os.path.dirname(out_path)):
+        os.makedirs(os.path.dirname(out_path))
+    node_label_df.to_csv(
+        out_path,
+        header=True,
+        index=False,
+        columns= [COL_FRAUD])
+
+
+    assert data[COL_FRAUD].sum() == node_label_df[COL_FRAUD].sum()
+
+    # Write NUM_TRANSACTION_NODES in info.json file
+    with open(
+        os.path.join(tabformer_gnn, "nodes/offset_range_of_training_node.json"), "w"
+    ) as json_file:
+        json.dump({"start": int(NR_USERS + NR_MXS) , "end": int(NR_USERS + NR_MXS + NR_TXS) }, json_file, indent=4)
+
+
+
+
+    ## Test data
+
+    data =  data_all[test_idx].copy()
+
+    data.reset_index(inplace=True, drop=True)
+
+    # The number of transaction is the same as the size of the list, and hence the index value
+    data[COL_TRANSACTION_ID] = data.index
+
+    merchant_name_to_id =  dict( zip(data[COL_MERCHANT].unique(), np.arange(len(data[COL_MERCHANT].unique()))) )
+
+
+    data[COL_MERCHANT_ID] = data[COL_MERCHANT].map(merchant_name_to_id)
+
+
+    # ##### NOTE: the 'User' and 'Card' columns of the original data were used to crate updated 'Card' column
+    # * You can use user or card as nodes
+
+    id_to_consecutive_id =  dict( zip(data[COL_CARD].unique(), np.arange(len(data[COL_CARD].unique()))) )
+
+    # Convert Card to consecutive IDs
+    data[COL_USER_ID] = data[COL_CARD].map(id_to_consecutive_id) 
+
+
 
     # Check the the transaction, merchant and user ids are consecutive
     id_range = data[COL_TRANSACTION_ID].min(), data[COL_TRANSACTION_ID].max()
@@ -550,230 +872,179 @@ def preprocess_data(tabformer_base_path):
     id_range = data[COL_USER_ID].min(), data[COL_USER_ID].max()
     print(f"User ID range {id_range}")
 
-    # Sanity checks
-    assert data[COL_TRANSACTION_ID].max() == data[COL_MERCHANT_ID].min() - 1
-    assert data[COL_MERCHANT_ID].max() == data[COL_USER_ID].min() - 1
-    assert len(data[COL_USER_ID].unique()) == (
-        data[COL_USER_ID].max() - data[COL_USER_ID].min() + 1
-    )
-    assert len(data[COL_MERCHANT_ID].unique()) == (
-        data[COL_MERCHANT_ID].max() - data[COL_MERCHANT_ID].min() + 1
-    )
-    assert len(data[COL_TRANSACTION_ID].unique()) == (
-        data[COL_TRANSACTION_ID].max() - data[COL_TRANSACTION_ID].min() + 1
-    )
 
-    # ### Write out the data for GNN
+    NR_USERS = data[COL_USER_ID].max() +1 
+    NR_MXS = data[COL_MERCHANT_ID].max() + 1
+    NR_TXS = data[COL_TRANSACTION_ID].max() +1
 
-    # #### Create the Graph Edge Data file
-    # The file is in COO format
-
-    # User to Transactions
     U_2_T = cudf.DataFrame()
     U_2_T[COL_GRAPH_SRC] = data[COL_USER_ID]
-    U_2_T[COL_GRAPH_DST] = data[COL_TRANSACTION_ID]
-    if make_undirected:
-        T_2_U = cudf.DataFrame()
-        T_2_U[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID]
-        T_2_U[COL_GRAPH_DST] = data[COL_USER_ID]
-        U_2_T = cudf.concat([U_2_T, T_2_U])
-        del T_2_U
+    U_2_T[COL_GRAPH_DST] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
 
-    # Transactions to Merchants
+
     T_2_M = cudf.DataFrame()
-    T_2_M[COL_GRAPH_SRC] = data[COL_MERCHANT_ID]
-    T_2_M[COL_GRAPH_DST] = data[COL_TRANSACTION_ID]
+    T_2_M[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+    T_2_M[COL_GRAPH_DST] = data[COL_MERCHANT_ID] + NR_USERS
 
-    if make_undirected:
-        M_2_T = cudf.DataFrame()
-        M_2_T[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID]
-        M_2_T[COL_GRAPH_DST] = data[COL_MERCHANT_ID]
-        T_2_M = cudf.concat([T_2_M, M_2_T])
-        del M_2_T
 
-    Edge = cudf.concat([U_2_T, T_2_M])
-    Edge[COL_GRAPH_WEIGHT] = 0.0
-    len(Edge)
+
+    T_2_U = cudf.DataFrame()
+    T_2_U[COL_GRAPH_SRC] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+    T_2_U[COL_GRAPH_DST] = data[COL_USER_ID]
+
+    M_2_T = cudf.DataFrame()
+    M_2_T[COL_GRAPH_SRC] = data[COL_MERCHANT_ID] + NR_USERS 
+    M_2_T[COL_GRAPH_DST] = data[COL_TRANSACTION_ID] + NR_USERS + NR_MXS
+        
+    Edge =  cudf.concat([U_2_T, T_2_M, T_2_U, M_2_T])
 
     # now write out the data
-    out_path = os.path.join(tabformer_edges, "node_to_node.csv")
+    out_path = os.path.join(tabformer_gnn, "test_gnn/edges/node_to_node.csv")
 
     if not os.path.exists(os.path.dirname(out_path)):
         os.makedirs(os.path.dirname(out_path))
 
     Edge.to_csv(out_path, header=True, index=False)
 
-    del Edge
-    del U_2_T
-    del T_2_M
 
     # ### Now the feature data
     # Feature data needs to be is sorted in order, where the row index corresponds to the node ID
     #
     # The data is comprised of three sets of features
     # * Transactions
-    # * Users
     # * Merchants
+    # * Users
 
     # #### To get feature vectors of Transaction nodes, transform the training data using pre-fitted transformer
 
-    node_feature_df = pd.DataFrame(
-        transformer.transform(data[predictor_columns].to_pandas()),
+    transaction_feature_df = pd.DataFrame(
+        transformer.transform(data[predictor_columns]),
         columns=columns_of_transformed_data,
     ).astype(type_mapping)
 
-    node_feature_df[COL_FRAUD] = data[COL_FRAUD].to_pandas()
+    transaction_feature_df[COL_FRAUD] = data[COL_FRAUD]
+    transaction_feature_df
 
-    # #### For graph nodes associated with merchant and user, add feature vectors of zeros
 
-    # Number of graph nodes for users and merchants
-    nr_users_and_merchant_nodes = max_user_id - max_tx_id
+    columns_of_transformed_data, transaction_feature_df.columns
 
-    if not spread_features:
-        # Create feature vector of all zeros for each user and merchant node
-        empty_feature_df = cudf.DataFrame(
-            columns=columns_of_transformed_data + target_column,
-            dtype="int8",
-            index=range(nr_users_and_merchant_nodes),
-        )
-        empty_feature_df = empty_feature_df.fillna(0)
-        empty_feature_df = empty_feature_df.astype(type_mapping)
 
-    if not spread_features:
-        # Concatenate transaction features followed by features for merchants and user nodes
-        node_feature_df = pd.concat(
-            [node_feature_df, empty_feature_df.to_pandas()]
-        ).astype(type_mapping)
+    data_merchant =  data[[COL_MERCHANT, COL_MCC, COL_CARD ]].drop_duplicates(subset=[COL_MERCHANT]).reset_index(drop=True)
+    data_user =  data[[COL_MERCHANT, COL_MCC, COL_CARD ]].drop_duplicates(subset=[COL_CARD]).reset_index(drop=True)
 
-    # User specific columns
-    if spread_features:
-        user_specific_columns = [COL_CARD, COL_CHIP]
-        user_specific_columns_of_transformed_data = []
+    len(data[COL_CARD].unique()), data_user.shape, data_merchant.shape, len(data[COL_MERCHANT].unique())
 
-        for col in node_feature_df.columns:
-            if col.split("_")[0] in user_specific_columns:
-                user_specific_columns_of_transformed_data.append(col)
+    data_merchant[COL_MERCHANT_ID] =  data_merchant[COL_MERCHANT].map(merchant_name_to_id)
+    data_merchant_sorted =  data_merchant.sort_values(by=COL_MERCHANT_ID)
 
-    # Merchant specific columns
-    if spread_features:
-        merchant_specific_columns = [COL_MERCHANT, COL_CITY, COL_ZIP, COL_MCC]
-        merchant_specific_columns_of_transformed_data = []
+    data_user[COL_USER_ID] = data_user[COL_CARD].map(id_to_consecutive_id)
+    data_user_sorted = data_user.sort_values(by=COL_USER_ID)
 
-        for col in node_feature_df.columns:
-            if col.split("_")[0] in merchant_specific_columns:
-                merchant_specific_columns_of_transformed_data.append(col)
 
-    # Transaction specific columns
-    if spread_features:
-        transaction_specific_columns = list(
-            set(numerical_predictors).union(nominal_predictors)
-            - set(user_specific_columns).union(merchant_specific_columns)
-        )
-        transaction_specific_columns_of_transformed_data = []
 
-        for col in node_feature_df.columns:
-            if col.split("_")[0] in transaction_specific_columns:
-                transaction_specific_columns_of_transformed_data.append(col)
+    preprocessed_merchant_data = pd.DataFrame(
+        id_transformer.transform(data_merchant_sorted[MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )[mx_feature_columns]
 
-    # #### Construct feature vector for merchants
 
-    if spread_features:
-        # Find indices of unique merchants
-        idx_df = cudf.DataFrame()
-        idx_df[COL_MERCHANT_ID] = data[COL_MERCHANT_ID]
-        idx_df = idx_df.sort_values(by=COL_MERCHANT_ID)
-        idx_df = idx_df.drop_duplicates(subset=COL_MERCHANT_ID)
-        assert (
-            data.iloc[idx_df.index][COL_MERCHANT_ID] == idx_df[COL_MERCHANT_ID]
-        ).all()
 
-    if spread_features:
-        # Copy merchant specific columns, and set the rest to zero
-        merchant_specific_feature_df = node_feature_df.iloc[idx_df.index.to_numpy()]
-        merchant_specific_feature_df.loc[
-            :,
-            transaction_specific_columns_of_transformed_data
-            + user_specific_columns_of_transformed_data,
-        ] = 0.0
 
-    if spread_features:
-        # Find indices of unique users
-        idx_df = cudf.DataFrame()
-        idx_df[COL_USER_ID] = data[COL_USER_ID]
-        idx_df = idx_df.sort_values(by=COL_USER_ID)
-        idx_df = idx_df.drop_duplicates(subset=COL_USER_ID)
-        assert (data.iloc[idx_df.index][COL_USER_ID] == idx_df[COL_USER_ID]).all()
+    preprocessed_user_data = pd.DataFrame(
+    id_transformer.transform(data_user_sorted[MERCHANT_AND_USER_COLS]), columns=columns_of_transformed_id_data
+    )[user_feature_columns]
 
-    if spread_features:
-        # Copy user specific columns, and set the rest to zero
-        user_specific_feature_df = node_feature_df.iloc[idx_df.index.to_numpy()]
-        user_specific_feature_df.loc[
-            :,
-            transaction_specific_columns_of_transformed_data
-            + merchant_specific_columns_of_transformed_data,
-        ] = 0.0
 
-    # Concatenate features of node, user and merchant
-    if spread_features:
 
-        node_feature_df[merchant_specific_columns_of_transformed_data] = 0.0
-        node_feature_df[user_specific_columns_of_transformed_data] = 0.0
-        node_feature_df = pd.concat(
-            [node_feature_df, merchant_specific_feature_df, user_specific_feature_df]
-        ).astype(type_mapping)
+    # out_path = os.path.join(tabformer_gnn, "test_gnn/nodes/user.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+        
+    # preprocessed_user_data.to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= user_feature_columns)
 
-        # features to save
-        node_feature_df = node_feature_df[
-            transaction_specific_columns_of_transformed_data
-            + merchant_specific_columns_of_transformed_data
-            + user_specific_columns_of_transformed_data
-            + [COL_FRAUD]
-        ]
 
-    # target labels to save
-    label_df = node_feature_df[[COL_FRAUD]]
+    # out_path = os.path.join(tabformer_gnn, "test_gnn/nodes/merchant.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # preprocessed_merchant_data.to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= mx_feature_columns)
 
-    # Remove target label from feature vectors
-    _ = node_feature_df.drop(columns=[COL_FRAUD], inplace=True)
 
-    # #### Write out node features and target labels
 
-    # Write node target label to csv file
-    out_path = os.path.join(tabformer_nodes, "node_label.csv")
 
-    if not os.path.exists(os.path.dirname(out_path)):
-        os.makedirs(os.path.dirname(out_path))
+    # out_path = os.path.join(tabformer_gnn, "test_gnn/edges/user_to_merchant_label.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # transaction_feature_df[[COL_FRAUD]].to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= [COL_FRAUD])
 
-    label_df.to_csv(out_path, header=True, index=False)
-    # label_df.to_parquet(out_path, index=False, compression='gzip')
 
-    # Write node features to csv file
-    out_path = os.path.join(tabformer_nodes, "node.csv")
+    # out_path = os.path.join(tabformer_gnn, "test_gnn/edges/user_to_merchant_attr.csv")
+    # if not os.path.exists(os.path.dirname(out_path)):
+    #     os.makedirs(os.path.dirname(out_path))
+    # transaction_feature_df[columns_of_transformed_data].to_csv(
+    #     out_path,
+    #     header=True,
+    #     index=False,
+    #     columns= columns_of_transformed_data)
 
-    if not os.path.exists(os.path.dirname(out_path)):
-        os.makedirs(os.path.dirname(out_path))
-    node_feature_df[columns_of_transformed_data].to_csv(
-        out_path, header=True, index=False
+    U = preprocessed_user_data.values
+    M = preprocessed_merchant_data.values
+    T = transaction_feature_df[columns_of_transformed_data].values
+
+    combined_cols =  user_feature_columns + mx_feature_columns + columns_of_transformed_data
+
+    node_feature_df = pd.DataFrame(
+        block_diag(U, M, T),
+        columns= combined_cols
     )
 
-    # Delete dataFrames
-    del data
-    del node_feature_df
-    del label_df
 
-    if spread_features:
-        del merchant_specific_feature_df
-        del user_specific_feature_df
-    else:
-        del empty_feature_df
+    assert COL_FRAUD  not in (list(preprocessed_user_data.columns) +  list(preprocessed_merchant_data.columns) + columns_of_transformed_data)
 
-    # Number of transaction nodes, needed for GNN training
-    nr_transaction_nodes = max_tx_id + 1
 
-    # Write NUM_TRANSACTION_NODES in info.json file
-    with open(
-        os.path.join(tabformer_nodes, "offset_range_of_training_node.json"), "w"
-    ) as json_file:
-        json.dump({"start": 0, "end": int(max_tx_id)}, json_file, indent=4)
+    out_path = os.path.join(tabformer_gnn, "test_gnn/nodes/node.csv")
+    if not os.path.exists(os.path.dirname(out_path)):
+        os.makedirs(os.path.dirname(out_path))
+    node_feature_df.to_csv(
+        out_path,
+        header=True,
+        index=False,
+        columns= combined_cols)
 
-    return create_feature_mask(columns_of_transformed_data)
+
+    # Initialize with all zeros
+    node_label_df = pd.DataFrame(
+        np.zeros(len(node_feature_df), dtype=int), columns=[COL_FRAUD]
+    )
+
+    # Copy the label of transaction nodes to corresponding indices
+    node_label_df.iloc[NR_USERS +NR_MXS : NR_USERS + NR_MXS + NR_TXS, 0] = transaction_feature_df[COL_FRAUD].values
+
+
+    out_path = os.path.join(tabformer_gnn, "test_gnn/nodes/node_label.csv")
+    if not os.path.exists(os.path.dirname(out_path)):
+        os.makedirs(os.path.dirname(out_path))
+    node_label_df.to_csv(
+        out_path,
+        header=True,
+        index=False,
+        columns= [COL_FRAUD])
+
+
+    assert set(node_label_df)- set(node_feature_df) == set([COL_FRAUD])
+    assert node_label_df[COL_FRAUD][0: NR_USERS +NR_MXS].sum() == 0
+    assert test_idx.sum() + training_idx.sum() + validation_idx.sum() ==  data_all.shape[0]
+    assert COL_FRAUD not in set(node_feature_df.columns)
+    assert COL_FRAUD in set(node_label_df.columns)
+
+    return create_feature_mask(node_feature_df.columns)
