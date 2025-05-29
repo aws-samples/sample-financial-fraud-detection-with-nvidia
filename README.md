@@ -50,7 +50,7 @@ This blueprint does not use any NVIDIA hosted services and runs fully in a local
 
 ### The following software components are used:
 
-- [financial-fraud-training](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/cugraph/containers/financial-fraud-training)
+- [__financial-fraud-training__ container](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/cugraph/containers/financial-fraud-training)
 - [NVIDIA Dynamo-Triton](https://developer.nvidia.com/dynamo)
 
 ### Software Requirements
