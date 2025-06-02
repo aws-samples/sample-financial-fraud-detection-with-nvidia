@@ -30,14 +30,11 @@ __Notice__: This README is for users running the notebook locally and makes assu
 
 
 # Overview
+Financial losses from worldwide credit card transaction fraud are [projected](https://www.paymentsdive.com/news/payments-fraud-losses-prevention-nilson-outlook/737440/) to reach more than $403 billion over the next decade. Transaction fraud poses a major challenge for financial institutions, which struggle to detect and prevent increasingly complicated fraudulent activities. Traditional fraud detection methods, which rely on rules-based systems or statistical methods, are reactive and increasingly ineffective in identifying sophisticated fraudulent activities. As data volumes grow and fraud tactics evolve, financial institutions need more proactive, intelligent approaches to detect and prevent fraudulent transactions.
 
-Transaction fraud is a [$43 billion problem annually](https://nilsonreport.com/articles/card-fraud-losses-worldwide-2/). It poses a major challenge for financial institutions which struggle to detect and prevent increasingly complicated fraudulent activities. Traditional fraud detection methods, which rely on rules-based systems, or statistical methods, are reactive and increasingly ineffective in identifying sophisticated fraudulent activities. As data volumes grow and fraud tactics evolve, systems need more proactive, intelligent approaches to detect and prevent fraudulent transactions.
-
-This NVIDIA AI blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a Financial Fraud Detection workflow using NVIDIA containers for fraud detection. The model-building container augments fraud detection using graph neural networks (GNN's), a deep learning technique, for improved accuracy. Inference is done using the [NVIDIA Dynamo-Triton](https://developer.nvidia.com/dynamo) which produces fraud scores along with [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) containing explanations.
+This NVIDIA AI Blueprint provides a reference example to detect and prevent sophisticated fraudulent activities for financial services with high accuracy and reduced false positives. It shows developers how to build a financial fraud detection workflow using the NVIDIA container for fraud detection. For model building, the Financial Fraud Training container augments fraud detection using graph neural networks (GNNs)—a deep learning technique—for improved accuracy. Inference is done using the NVIDIA Dynamo-Triton (formerly Triton Inference Server) and produces fraud scores along with Shapley values for explainability. Furthermore, to help simplify the workflow, the Financial Fraud Training container also produces all the needed configuration files required by Dynamo-Triton. 
 
 <img width="1000" alt="Architecture Diagram" src="docs/financial-fraud-bp.png"/>
-
-___PICTURE NEEDS TO BE UPDATED___
 
 
 This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (__NEED LINK TO DOCs__) model-building container. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo-Triton for inference.
@@ -54,22 +51,14 @@ This blueprint does not use any NVIDIA hosted services and runs fully in a local
 - [NVIDIA Dynamo-Triton](https://developer.nvidia.com/dynamo)
 
 ### Software Requirements
+- Operating System: Ubuntu 20.04 or newer
+- NVIDIA Driver version: 535 or newer
+- NVIDIA CUDA version: 12.4 or newer
+- NVIDIA Container Toolkit version: 1.15.0 or newer
+- Docker version: Docker version 26 or newer
 
-#### OS:
-- Linux distributions with glibc>=2.28 (released in August 2018), which include the following:
-- Arch Linux, minimum version 2018-08-02
-- Debian, minimum version 10.0
-- Fedora, minimum version 29
-- Linux Mint, minimum version 20
-- Rocky Linux / Alma Linux / RHEL, minimum version 8
-- Ubuntu, minimum version 20.04
-- Windows 11 using a WSL2 specific install
 
-#### CUDA & NVIDIA Drivers: One of the following supported versions:
-- CUDA 11.8 with Driver 520.61.05 or newer
-- CUDA 12.0 with Driver 525.60.13 or newer
-- CUDA 12.2 with Driver 535.86.10 or newer
-- CUDA 12.5 with Driver 555.42.06 or newer
+
 
 Everything is run via a Jupyter Notebook.
 
@@ -94,15 +83,12 @@ This notebook is a simple example of how to orchestrate a financial fraud detect
 
 <br>
 
-### System Requirements
+### Hardware Requirements
 
+- GPU: 1x A6000, A100, or H100, minimum of 32 GB of memory 
 - CPU: x86_64 architecture
-- Storage: 10GB
-- System Memory: 16GB
-
-### GPU
-- NVIDIA Volta™ or higher with compute capability 7.0+
-
+- Storage: 10 GB
+- System Memory: 16 GB
 
 
 <br>
