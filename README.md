@@ -36,8 +36,7 @@ This NVIDIA AI Blueprint provides a reference example to detect and prevent soph
 
 <img width="1000" alt="Architecture Diagram" src="docs/financial-fraud-bp.png"/>
 
-
-This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the ___financial-fraud-training___ (__NEED LINK TO DOCs__) model-building container. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo-Triton for inference.
+This NVIDIA AI blueprint is broken down into three steps, which map to processes within a typical payment processing environment, those steps are: (1) Data Preparation, (2) Model Building, and (3) Data Inference. For this example, the data is a collection of files containing synthetic data. Within a production system, the event data is often saved within a database or a data lake. The data is prepared and then fed into the [__financial-fraud-training container__](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/cugraph/containers/financial-fraud-training) model-building container. The output of the NIM folder with all the artifacts needs to be passed to NVIDIA Dynamo-Triton for inference.
 
 This blueprint does not use any NVIDIA hosted services and runs fully in a locally hosted docker environment.
 
