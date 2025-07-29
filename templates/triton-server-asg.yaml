@@ -1,0 +1,83 @@
+---
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:us-east-1:771830474512:generatedTemplate/72c871a8-e3eb-4936-9322-41705d6c34b9"
+Resources:
+  AutoScalingAutoScalingGroupTritonserver:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    DeletionPolicy: "Retain"
+    Properties:
+      LifecycleHookSpecificationList:
+      - LifecycleHookName: "ecs-managed-draining-termination-hook"
+        HeartbeatTimeout: 3600
+        DefaultResult: "CONTINUE"
+        LifecycleTransition: "autoscaling:EC2_INSTANCE_TERMINATING"
+      LoadBalancerNames: []
+      ServiceLinkedRoleARN: "arn:aws:iam::771830474512:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+      TargetGroupARNs:
+      - "arn:aws:elasticloadbalancing:us-east-1:771830474512:targetgroup/triton-server-loadbalancer/80255d37771a7eae"
+      Cooldown: "300"
+      AvailabilityZones:
+      - "us-east-1a"
+      - "us-east-1b"
+      - "us-east-1c"
+      - "us-east-1d"
+      - "us-east-1f"
+      AvailabilityZoneDistribution:
+        CapacityDistributionStrategy: "balanced-best-effort"
+      DesiredCapacity: "1"
+      HealthCheckGracePeriod: 300
+      MetricsCollection:
+      - Granularity: "1Minute"
+        Metrics:
+        - "GroupAndWarmPoolTotalCapacity"
+        - "GroupStandbyCapacity"
+        - "GroupTerminatingInstances"
+        - "GroupInServiceCapacity"
+        - "WarmPoolWarmedCapacity"
+        - "GroupDesiredCapacity"
+        - "GroupInServiceInstances"
+        - "GroupStandbyInstances"
+        - "WarmPoolMinSize"
+        - "WarmPoolTerminatingCapacity"
+        - "GroupMaxSize"
+        - "GroupTerminatingCapacity"
+        - "WarmPoolPendingCapacity"
+        - "GroupPendingInstances"
+        - "GroupMinSize"
+        - "GroupTotalCapacity"
+        - "GroupAndWarmPoolDesiredCapacity"
+        - "GroupPendingCapacity"
+        - "GroupTotalInstances"
+        - "WarmPoolDesiredCapacity"
+        - "WarmPoolTotalCapacity"
+      InstanceMaintenancePolicy:
+        MinHealthyPercentage: 100
+        MaxHealthyPercentage: 110
+      MaxSize: "1"
+      NewInstancesProtectedFromScaleIn: false
+      MinSize: "0"
+      TerminationPolicies:
+      - "Default"
+      LaunchTemplate:
+        Version: "$Default"
+        LaunchTemplateName: "triton-baseline"
+        LaunchTemplateId: "lt-023c9de0b45f25e34"
+      AutoScalingGroupName: "triton-server"
+      TrafficSources:
+      - Type: "elbv2"
+        Identifier: "arn:aws:elasticloadbalancing:us-east-1:771830474512:targetgroup/triton-server-loadbalancer/80255d37771a7eae"
+      VPCZoneIdentifier:
+      - "subnet-0031443a677b5c718"
+      - "subnet-0f2471dc1b586edea"
+      - "subnet-0984b0d743451e7ca"
+      - "subnet-00aa0a150f061f676"
+      - "subnet-00a258f8ef44737af"
+      CapacityReservationSpecification:
+        CapacityReservationPreference: "default"
+      Tags:
+      - Value: ""
+        Key: "AmazonECSManaged"
+        PropagateAtLaunch: true
+      HealthCheckType: "EC2"

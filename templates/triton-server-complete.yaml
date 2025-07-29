@@ -1,0 +1,204 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Triton Server infrastructure'
+
+Resources:
+  # Security Group
+  TritonSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Triton Server
+      VpcId: vpc-06ae6b6ab3f38f8ee
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 76.226.183.14/32
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 8005
+          ToPort: 8005
+          CidrIp: 0.0.0.0/0
+          Description: Triton HTTP port
+        - IpProtocol: udp
+          FromPort: 8005
+          ToPort: 8005
+          CidrIp: 0.0.0.0/0
+          Description: Triton HTTP port (UDP)
+        - IpProtocol: tcp
+          FromPort: 8006
+          ToPort: 8006
+          CidrIp: 0.0.0.0/0
+          Description: Triton gRPC port
+        - IpProtocol: udp
+          FromPort: 8006
+          ToPort: 8006
+          CidrIp: 0.0.0.0/0
+          Description: Triton gRPC port (UDP)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: triton-security-group
+
+  # Launch Template
+  TritonLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: triton-baseline
+      VersionDescription: Launch template for Triton Server
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              Encrypted: false
+              Iops: 3000
+              SnapshotId: snap-09dd633dc616b520c
+              VolumeSize: 200
+              VolumeType: gp3
+              Throughput: 125
+        ImageId: ami-02cfee4bbca067adc
+        InstanceType: g4dn.xlarge
+        KeyName: ws-test
+        SecurityGroupIds:
+          - !Ref TritonSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            aws s3 cp s3://ml-on-containers/output/new-nim-4/output/model.tar.gz .
+            tar -xzf model.tar.gz
+            docker pull nvcr.io/nvidia/tritonserver:25.01-py3
+            docker run --gpus all -d -p 8005:8005 -p 8006:8006 -p 8007:8007 -v python_backend_model_repository:/models --name tritonserver nvcr.io/nvidia/tritonserver:25.01-py3 --model-repository=/models --http-port 8005 --grpc-port=8006 --metrics-port=8007
+        MetadataOptions:
+          HttpTokens: required
+
+  # Target Group
+  TritonTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: triton-server-loadbalancer
+      Port: 8005
+      Protocol: HTTP
+      VpcId: vpc-06ae6b6ab3f38f8ee
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckPort: '80'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      UnhealthyThresholdCount: 5
+      TargetType: instance
+      Matcher:
+        HttpCode: '200'
+
+  # Load Balancer
+  TritonLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: triton-server-loadbalancer
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref TritonSecurityGroup
+      Subnets:
+        - subnet-0031443a677b5c718
+        - subnet-00a258f8ef44737af
+        - subnet-00aa0a150f061f676
+        - subnet-01ed4d894f0cd2536
+        - subnet-0984b0d743451e7ca
+        - subnet-0f2471dc1b586edea
+      IpAddressType: ipv4
+
+  # Listener
+  TritonListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TritonTargetGroup
+      LoadBalancerArn: !Ref TritonLoadBalancer
+      Port: 8005
+      Protocol: HTTP
+
+  # Auto Scaling Group
+  TritonAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: triton-server
+      AvailabilityZones:
+        - us-east-1a
+        - us-east-1b
+        - us-east-1c
+        - us-east-1d
+        - us-east-1f
+      AvailabilityZoneDistribution:
+        CapacityDistributionStrategy: balanced-best-effort
+      DesiredCapacity: 1
+      HealthCheckGracePeriod: 300
+      HealthCheckType: EC2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref TritonLaunchTemplate
+        Version: !GetAtt TritonLaunchTemplate.LatestVersionNumber
+      MaxSize: 1
+      MinSize: 0
+      TargetGroupARNs:
+        - !Ref TritonTargetGroup
+      VPCZoneIdentifier:
+        - subnet-0031443a677b5c718
+        - subnet-0f2471dc1b586edea
+        - subnet-0984b0d743451e7ca
+        - subnet-00aa0a150f061f676
+        - subnet-00a258f8ef44737af
+      LifecycleHookSpecificationList:
+        - LifecycleHookName: ecs-managed-draining-termination-hook
+          HeartbeatTimeout: 3600
+          DefaultResult: CONTINUE
+          LifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
+      MetricsCollection:
+        - Granularity: 1Minute
+          Metrics:
+            - GroupAndWarmPoolTotalCapacity
+            - GroupStandbyCapacity
+            - GroupTerminatingInstances
+            - GroupInServiceCapacity
+            - WarmPoolWarmedCapacity
+            - GroupDesiredCapacity
+            - GroupInServiceInstances
+            - GroupStandbyInstances
+            - WarmPoolMinSize
+            - WarmPoolTerminatingCapacity
+            - GroupMaxSize
+            - GroupTerminatingCapacity
+            - WarmPoolPendingCapacity
+            - GroupPendingInstances
+            - GroupMinSize
+            - GroupTotalCapacity
+            - GroupAndWarmPoolDesiredCapacity
+            - GroupPendingCapacity
+            - GroupTotalInstances
+            - WarmPoolDesiredCapacity
+            - WarmPoolTotalCapacity
+      InstanceMaintenancePolicy:
+        MinHealthyPercentage: 100
+        MaxHealthyPercentage: 110
+      Tags:
+        - Key: AmazonECSManaged
+          Value: ''
+          PropagateAtLaunch: true
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the load balancer
+    Value: !GetAtt TritonLoadBalancer.DNSName
+  
+  TargetGroupARN:
+    Description: ARN of the target group
+    Value: !Ref TritonTargetGroup
+  
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref TritonAutoScalingGroup
