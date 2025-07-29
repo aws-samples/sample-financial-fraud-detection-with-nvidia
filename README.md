@@ -5,7 +5,7 @@ This Nvidia AI Blueprint along with the AWS Deployment guide provides a referenc
 
 This is the general architecture diagram for how we host the blueprint on AWS.
 
-![Architecture diagram showing the end-to-end AWS deployment workflow: A Sagemaker development environment connects to S3 for data storage and preprocessing. The workflow shows data moving from Sagemaker to S3, then to a Sagemaker Training job. The trained model is stored in S3 and loaded into EFS, which connects to an EC2/ECS instance running Nvidia Triton for model inference. The diagram illustrates the complete pipeline from development to production deployment.](./docs/arch-diagram.svg)
+![Architecture diagram showing the end-to-end AWS deployment workflow: A Sagemaker development environment connects to S3 for data storage and preprocessing. The workflow shows data moving from Sagemaker to S3, then to a Sagemaker Training job. The trained model is stored in S3 and loaded into EFS, which connects to an EC2/ECS instance running Nvidia Triton for model inference. The diagram illustrates the complete pipeline from development to production deployment.](./docs/arch-diagram.png)
 
 1. We will host our development environment inside sagemaker as it permits us to offload long lived compute to the cloud without having to keep our system up.
 2. The notebook then does the data preprocessing for our model, splits it into training and testing sets, and uploads the data sets into S3.
