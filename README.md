@@ -37,13 +37,15 @@ To successfully deploy this blueprint, you will need:
 
 1. **AWS Account** - with appropriate permissions to create SageMaker, EC2, ECS,
 and ECR resources
-2. **Nvidia NGC API Key** - required to access Nvidia's
-container registry and models
-   - Please refer to the [Nvidia NGC
-     documentation](https://docs.nvidia.com/ngc/ngc-overview/index.html#generating-api-key)
-     for instructions on obtaining your API key 3. **Local machine** - with
-     Docker installed and approximately 30GB of available storage space 4.
-     **Git** - for cloning the repository
+
+2. **Nvidia NGC API Key** - required to access Nvidia's container registry and models
+  - Please refer to the [Nvidia NGC
+    documentation](https://docs.nvidia.com/ngc/ngc-overview/index.html#generating-api-key)
+    for instructions on obtaining your API key
+
+3. **Local machine** - with Docker installed and approximately 30GB of available storage space
+
+4. **Git** - for cloning the repository
 
 ## Setup Instructions
 
@@ -64,7 +66,7 @@ From your local machine with Docker installed:
 ```sh
 git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
 cd fraud-detection-blueprint-with-triton
-   ```
+```
 
 2. Configure your AWS credentials
 ```sh
