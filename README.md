@@ -60,29 +60,45 @@ container registry and models
 
 From your local machine with Docker installed:
 
-1. Clone this repository ```sh git clone
-   https://github.com/aws-samples/fraud-detection-blueprint-with-triton cd
-   fraud-detection-blueprint-with-triton ```
+1. Clone this repository
+```sh
+git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
+cd fraud-detection-blueprint-with-triton
+   ```
 
-2. Configure your AWS credentials ```sh aws configure ```
+2. Configure your AWS credentials
+```sh
+aws configure
+```
 
-3. Log in to Nvidia NGC ```sh docker login nvcr.io ``` When prompted, use your
+3. Log in to Nvidia NGC
+```sh
+docker login nvcr.io
+```
+When prompted, use your
    NGC API key as the password and `$oauthtoken` as the username
 
-4. Execute the provided Makefile to build and push the container to ECR ```sh
-   make setup-ecr ``` This will pull the necessary Nvidia container, tag it
+4. Execute the provided Makefile to build and push the container to ECR
+```sh
+make setup-ecr
+```
+This will pull the necessary Nvidia container, tag it
    appropriately, and push it to your ECR repository
 
 ### Set up Development Environment in SageMaker Studio
 
 From within your SageMaker Studio environment:
 
-1. Clone the repository ```sh git clone
-   https://github.com/aws-samples/fraud-detection-blueprint-with-triton ```
+1. Clone the repository
+```sh
+git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
+```
 
-2. Set up the required conda environment ```sh conda env create -f
-   ./fraud-detection-blueprint-with-triton/conda/notebook_env.yaml conda
-   activate notebook_env ```
+2. Set up the required conda environment
+```sh
+conda env create -f ./fraud-detection-blueprint-with-triton/conda/notebook_env.yaml
+conda activate notebook_env
+```
 
 3. Open the notebook and follow the instructions
    - Navigate to the `notebooks` directory and open the main notebook
