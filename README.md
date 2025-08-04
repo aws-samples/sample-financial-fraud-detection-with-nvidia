@@ -1,6 +1,7 @@
 # Getting Started - AWS Edition
 
-## Overview This Nvidia AI Blueprint along with the AWS Deployment guide
+## Overview
+This Nvidia AI Blueprint along with the AWS Deployment guide
 provides a reference example to deploy an End to End financial fraud detection
 workflow using Machine Learning. We will leverage Nvidia's Triton inference
 server to host our models while we use Sagemaker for training the model and
@@ -77,15 +78,28 @@ aws configure
 ```sh
 docker login nvcr.io
 ```
-When prompted, use your
-   NGC API key as the password and `$oauthtoken` as the username
+When prompted, use your NGC API key as the password and `$oauthtoken` as the username
+
+If you don't have an NGC API key, follow these steps:
+1. Go to the [NVIDIA NGC website](https://ngc.nvidia.com/)
+2. Create an account or sign in
+3. Navigate to your account settings
+4. Generate an API key in the "Setup" section
 
 4. Execute the provided Makefile to build and push the container to ECR
 ```sh
-make setup-ecr
+make setup-ecr AWS_REGION=your-aws-region
 ```
-This will pull the necessary Nvidia container, tag it
-   appropriately, and push it to your ECR repository
+This will:
+- Create an ECR repository if it doesn't exist
+- Pull the necessary Nvidia container from NGC
+- Tag it appropriately for your ECR repository
+- Push the container to your ECR
+
+You can view all available Makefile commands with:
+```sh
+make help
+```
 
 ### Set up Development Environment in SageMaker Studio
 
