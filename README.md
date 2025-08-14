@@ -27,7 +27,7 @@ deployment.](./docs/arch-diagram.png)
    process in our inference instance.
 5. The model is taken from S3 and loaded into EFS asynchronously so that it's
    ready to go into production.
-6. For inference, we host an EC2/ECS service with a GPU attached to it that
+6. For inference, we host an ECS service with a GPU attached to it that
    reads the model from an attached EFS drive and hosts it on Nvidia
    Dynamo-Triton.
 
