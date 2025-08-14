@@ -3,9 +3,8 @@
 ## Overview
 This Nvidia AI Blueprint along with the AWS Deployment guide
 provides a reference example to deploy an End to End financial fraud detection
-workflow using Machine Learning. We will leverage Nvidia's Triton inference
-server to host our models while we use Sagemaker for training the model and
-EC2/ECS to host it.
+blueprint using Graph Neural Networks. We will leverage Nvidia's Triton inference
+server to host our models while we use Sagemaker for training the model and ECS to host it.
 
 This is the general architecture diagram for how we host the blueprint on AWS.
 
