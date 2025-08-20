@@ -1,0 +1,135 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "triton-inference-server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ template "triton-inference-server.name" . }}
+    chart: {{ template "triton-inference-server.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  annotations:
+    # AWS Load Balancer Controller annotations
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.scheme | default "internet-facing" }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /v2/health/ready
+    alb.ingress.kubernetes.io/healthcheck-port: '8005'
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '5'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: alb
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          # HTTP inference endpoint
+          - path: /v2
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" $ }}
+                port:
+                  number: 8005
+          # Health and status endpoints
+          - path: /v2/health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" $ }}
+                port:
+                  number: 8005
+          # Model repository endpoints
+          - path: /v2/repository
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" $ }}
+                port:
+                  number: 8005
+          # Metrics endpoint (optional, usually internal)
+          {{- if .Values.ingress.exposeMetrics }}
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" $ }}
+                port:
+                  number: 8007
+          {{- end }}
+          # Catch-all for other HTTP requests
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" $ }}
+                port:
+                  number: 8005
+    {{- end }}
+    {{- if not .Values.ingress.hosts }}
+    # Default rule when no hosts specified
+    - http:
+        paths:
+          # HTTP inference endpoint
+          - path: /v2
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" . }}
+                port:
+                  number: 8005
+          # Health and status endpoints
+          - path: /v2/health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" . }}
+                port:
+                  number: 8005
+          # Model repository endpoints
+          - path: /v2/repository
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" . }}
+                port:
+                  number: 8005
+          # Metrics endpoint
+          {{- if .Values.ingress.exposeMetrics }}
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" . }}
+                port:
+                  number: 8007
+          {{- end }}
+          # Catch-all for other HTTP requests
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ template "triton-inference-server.fullname" . }}
+                port:
+                  number: 8005
+    {{- end }}
+{{- end }}
