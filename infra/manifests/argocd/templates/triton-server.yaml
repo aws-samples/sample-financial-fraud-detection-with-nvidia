@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: triton-server
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoUrl }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: infra/manifests/helm/triton
+    helm:
+      values: |
+        serviceAccount:
+          name: {{ .Values.serviceAccount.name }}
+        replicaCount: 1
+        image:
+          imageName: nvcr.io/nvidia/tritonserver:25.07-py3
+          pullPolicy: IfNotPresent
+          modelRepositoryPath: s3://{{ .Values.bucketName }}/model-repository
+          numGpus: 1
+        service:
+          type: ClusterIP
+        ingress:
+          enabled: true
+          scheme: internet-facing
+          exposeMetrics: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
