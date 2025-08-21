@@ -37,7 +37,7 @@ npm install
 
 2. Bootstrap CDK (if not already done):
 ```bash
-cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
+cdk bootstrap aws://<ACCOUNT>/<REGION>
 ```
 
 3. Configure environment variables:
