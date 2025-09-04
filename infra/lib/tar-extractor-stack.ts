@@ -3,6 +3,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 
 export interface TarExtractorStackProps extends cdk.StackProps {
@@ -23,19 +24,22 @@ export class TarExtractorStack extends cdk.Stack {
     // Destination bucket for extracted files
     const destinationBucket = new s3.Bucket(this, 'ModelRegistryBucket', {
       bucketName: props.modelBucketName + '-model-registry',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // Change for production
-      autoDeleteObjects: true, // Change for production
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      serverAccessLogsPrefix: 'access-logs/',
+      enforceSSL: true,
+      encryption: s3.BucketEncryption.S3_MANAGED
     });
 
     // Lambda function for tar extraction
     const extractorFunction = new lambda.Function(this, 'TarExtractorFunction', {
-      runtime: lambda.Runtime.PYTHON_3_11,
+      runtime: lambda.Runtime.PYTHON_3_12,
       handler: 'index.handler',
-      timeout: cdk.Duration.minutes(15), // Adjust based on file sizes
-      memorySize: 4096, // Adjust based on tar file sizes
+      timeout: cdk.Duration.minutes(15),
+      memorySize: 4096,
       environment: {
         DESTINATION_BUCKET: destinationBucket.bucketName,
-        SSM_PARAMETER_NAME: '/triton/model', // SSM parameter containing model name
+        SSM_PARAMETER_NAME: '/triton/model',
       },
       code: lambda.Code.fromInline(`
 import json
@@ -258,6 +262,69 @@ def handler(event, context):
         prefix: 'output/',
         suffix: '.tgz'
       }
+    );
+
+    // Add CDK Nag suppressions
+    NagSuppressions.addResourceSuppressions(
+      destinationBucket,
+      [
+        {
+          id: 'AwsSolutions-S1',
+          reason: 'Server access logs are enabled with serverAccessLogsPrefix'
+        },
+        {
+          id: 'AwsSolutions-S10',
+          reason: 'SSL enforcement is enabled with enforceSSL: true'
+        }
+      ]
+    );
+
+    NagSuppressions.addResourceSuppressions(
+      extractorFunction,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWS managed policy required for Lambda basic execution',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole']
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Wildcard permissions required for S3 bucket operations',
+          appliesTo: [
+            'Action::s3:GetBucket*',
+            'Action::s3:GetObject*',
+            'Action::s3:List*',
+            'Action::s3:Abort*',
+            'Action::s3:DeleteObject*',
+            'Resource::*',
+            'Resource::arn:aws:s3:::ml-on-containers/*',
+            'Resource::<ModelRegistryBucketBC3B3633.Arn>/*'
+          ]
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason: 'Using Python 3.12 which is the latest supported runtime'
+        }
+      ],
+      true
+    );
+
+    // Suppress bucket notifications handler warnings
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      '/NvidiaFraudDetectionBlueprintModelExtractor/BucketNotificationsHandler050a0587b7544547bf325f094a3db834/Role',
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'AWS managed policy required for S3 bucket notifications',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole']
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason: 'Wildcard permissions required for S3 bucket notifications functionality',
+          appliesTo: ['Resource::*']
+        }
+      ]
     );
 
     // Outputs
