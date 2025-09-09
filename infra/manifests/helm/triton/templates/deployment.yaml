@@ -57,6 +57,11 @@ spec:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.imageName }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
         command:
         - tritonserver
         - --model-repository={{ .Values.image.modelRepositoryPath }}
@@ -85,6 +90,13 @@ spec:
           httpGet:
             path: /v2/health/ready
             port: http
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
       securityContext:
         runAsUser: 1000
+        runAsNonRoot: true
         fsGroup: 1000

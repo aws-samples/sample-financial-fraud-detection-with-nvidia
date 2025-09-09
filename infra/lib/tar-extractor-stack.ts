@@ -157,12 +157,12 @@ def handler(event, context):
                             relative_path = os.path.relpath(local_file_path, python_backend_path)
                             
                             # Normalize path separators for cross-platform compatibility
-                            relative_path = relative_path.replace('\\\\', '/')
+                            relative_path = relative_path.replace('\\\\\\\\', '/')
                             
                             # Upload to model-repository structure
-                            destination_key = f"model-repository/{relative_path}"
+                            destination_key = f"model-repository/${{relative_path}}"
                             
-                            print(f"Uploading {local_file_path} to s3://{destination_bucket}/{destination_key}")
+                            print(f"Uploading ${{local_file_path}} to s3://${{destination_bucket}}/${{destination_key}}")
                             
                             # Upload file to S3
                             try:
@@ -188,7 +188,7 @@ def handler(event, context):
                             relative_path = os.path.relpath(local_file_path, extract_dir)
                             
                             # Normalize path separators for cross-platform compatibility
-                            relative_path = relative_path.replace('\\\\', '/')
+                            relative_path = relative_path.replace('\\\\\\\\', '/')
                             
                             # Find matching model mapping
                             destination_key = None
@@ -196,7 +196,7 @@ def handler(event, context):
                                 if relative_path.startswith(source_pattern + '/'):
                                     # Replace the source pattern with destination pattern
                                     file_within_model = relative_path[len(source_pattern + '/'):]
-                                    destination_key = f"{dest_pattern}/{file_within_model}"
+                                    destination_key = f"${{dest_pattern}}/${{file_within_model}}"
                                     break
                             
                             # Skip files that don't match our expected structure

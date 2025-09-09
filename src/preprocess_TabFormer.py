@@ -231,8 +231,7 @@ def preprocess_data(tabformer_base_path):
     T[1] = T[1].astype("int32")
 
     # replace the 'Time' column with the new columns
-    data[COL_TIME] = (T[0] * 60) + T[1]
-    data[COL_TIME] = data[COL_TIME].astype("int32")
+    data[COL_TIME] = ((T[0] * 60) + T[1]).astype("int32")
 
     # Delete temporary DataFrame
     del T
@@ -242,8 +241,7 @@ def preprocess_data(tabformer_base_path):
     max_nr_cards_per_user = len(data[COL_CARD].unique())
 
     # Combine User and Card to generate unique numbers
-    data[COL_CARD] = data[COL_USER] * len(data[COL_CARD].unique()) + data[COL_CARD]
-    data[COL_CARD] = data[COL_CARD].astype("int")
+    data[COL_CARD] = (data[COL_USER] * len(data[COL_CARD].unique()) + data[COL_CARD]).astype("int")
 
     # Collect unique merchant, card and MCC in a dataframe and fit a binary transformer
     data = data.to_pandas()
@@ -794,7 +792,7 @@ def preprocess_data(tabformer_base_path):
 
     # Write NUM_TRANSACTION_NODES in info.json file
     with open(
-        os.path.join(tabformer_gnn, "nodes/offset_range_of_training_node.json"), "w"
+        os.path.join(tabformer_gnn, "nodes/offset_range_of_training_node.json"), "w", encoding="utf-8"
     ) as json_file:
         json.dump(
             {"start": int(NR_USERS + NR_MXS), "end": int(NR_USERS + NR_MXS + NR_TXS)},
