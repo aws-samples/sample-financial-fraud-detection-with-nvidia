@@ -64,8 +64,8 @@ From your local machine with Node.js and AWS CDK installed:
 
 1. Clone this repository
 ```sh
-git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
-cd fraud-detection-blueprint-with-triton/infra
+git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
+cd financial-fraud-detection-with-nvidia/infra
 ```
 
 2. Configure your AWS credentials
@@ -101,12 +101,12 @@ From within your SageMaker Studio environment:
 
 1. Clone the repository
 ```sh
-git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
+git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
 ```
 
 2. Set up the required conda environment
 ```sh
-conda env create -f ./fraud-detection-blueprint-with-triton/conda/notebook_env.yaml
+conda env create -f ./financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
 conda activate notebook_env
 ```
 
