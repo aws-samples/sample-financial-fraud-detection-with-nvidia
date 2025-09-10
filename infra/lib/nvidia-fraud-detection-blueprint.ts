@@ -198,6 +198,22 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
       true
     );
 
+    // Additional suppression for KubectlProvider ECR Public access
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      '/NvidiaFraudDetectionBlueprint/ClusterBlueprint/ClusterBlueprint/KubectlProvider/Handler/ServiceRole/Resource',
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason: 'ECR Public ReadOnly policy required for kubectl provider to access public container images',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly',
+            'Policy::{\"Fn::If\":[\"ClusterBlueprintKubectlProviderHandlerHasEcrPublicFD2FFDE5\",{\"Fn::Join\":[\"\",[\"arn:\",{\"Ref\":\"AWS::Partition\"},\":iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly\"]]},{\"Ref\":\"AWS::NoValue\"}]}'
+          ]
+        }
+      ]
+    );
+
     // Suppress VPC flow log warning
     NagSuppressions.addResourceSuppressions(
       vpc,
