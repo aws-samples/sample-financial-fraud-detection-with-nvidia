@@ -130,3 +130,11 @@ Follow the step-by-step instructions in the notebook to:
 
 For detailed troubleshooting and additional configuration options, refer to the
 documentation in the `docs` directory.
+
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+
+## License
+
+This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.
