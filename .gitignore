@@ -14,3 +14,8 @@ __pycache__
 
 # json
 notebooks/*.json
+
+# CDK
+cdk.context.json
+cdk.out/
+.cdk.staging
