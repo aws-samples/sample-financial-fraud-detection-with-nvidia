@@ -4,17 +4,17 @@
 This Nvidia AI Blueprint along with the AWS Deployment guide
 provides a reference example to deploy an End to End financial fraud detection
 blueprint using Graph Neural Networks. We will leverage Nvidia's Triton inference
-server to host our models while we use Sagemaker for training the model and ECS to host it.
+server to host our models while we use Sagemaker for training the model and Amazon EKS (Elastic Kubernetes Service) to host it.
+server to host our models while we use Sagemaker for training the model and EKS (Kubernetes) to host it.
 
 This is the general architecture diagram for how we host the blueprint on AWS.
 
 ![Architecture diagram showing the end-to-end AWS deployment workflow: A
 Sagemaker development environment connects to S3 for data storage and
 preprocessing. The workflow shows data moving from Sagemaker to S3, then to a
-Sagemaker Training job. The trained model is stored in S3 and loaded into EFS,
-which connects to an EC2/ECS instance running Nvidia Triton for model inference.
-The diagram illustrates the complete pipeline from development to production
-deployment.](./docs/arch-diagram.png)
+Sagemaker Training job. The trained model is stored in S3 and loaded into an
+EKS cluster running Nvidia Triton for model inference. The diagram illustrates
+the complete pipeline from development to production deployment.](./docs/arch-diagram.png)
 
 1. We will host our development environment inside SageMaker as it permits us to
    offload long lived compute to the cloud without having to keep our system up.
@@ -25,17 +25,17 @@ deployment.](./docs/arch-diagram.png)
    training job.
 4. The trained model is output into S3, and that kicks off the model reload
    process in our inference instance.
-5. The model is taken from S3 and loaded into EFS asynchronously so that it's
+5. The model is taken from S3 and loaded into the EKS cluster so that it's
    ready to go into production.
-6. For inference, we host an ECS service with a GPU attached to it that
-   reads the model from an attached EFS drive and hosts it on Nvidia
-   Dynamo-Triton.
+6. For inference, we deploy Nvidia Triton on an EKS cluster with GPU-enabled nodes
+   (g4dn instances) that reads the model from S3 and serves it through a load-balanced
+   endpoint.
 
 ## Prerequisites
 
 To successfully deploy this blueprint, you will need:
 
-1. **AWS Account** - with appropriate permissions to create SageMaker, EC2, ECS,
+1. **AWS Account** - with appropriate permissions to create SageMaker, EKS, EC2,
 and ECR resources
 
 2. **Nvidia NGC API Key** - required to access Nvidia's container registry and models
@@ -58,14 +58,14 @@ and ECR resources
 5. Create a new notebook instance with at least `ml.g4dn.4xlarge` instance type
    and 50GB of storage
 
-### Upload Nvidia Container to ECR
+### Deploy Infrastructure with AWS CDK
 
-From your local machine with Docker installed:
+From your local machine with Node.js and AWS CDK installed:
 
 1. Clone this repository
 ```sh
-git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
-cd fraud-detection-blueprint-with-triton
+git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
+cd financial-fraud-detection-with-nvidia/infra
 ```
 
 2. Configure your AWS credentials
@@ -73,32 +73,27 @@ cd fraud-detection-blueprint-with-triton
 aws configure
 ```
 
-3. Log in to Nvidia NGC
+3. Install dependencies and bootstrap CDK
 ```sh
-docker login nvcr.io
+npm install
+cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
 ```
-When prompted, use your NGC API key as the password and `$oauthtoken` as the username
 
-If you don't have an NGC API key, follow these steps:
-1. Go to the [NVIDIA NGC website](https://ngc.nvidia.com/)
-2. Create an account or sign in
-3. Navigate to your account settings
-4. Generate an API key in the "Setup" section
-
-4. Execute the provided Makefile to build and push the container to ECR
+4. Deploy the EKS cluster and supporting infrastructure
 ```sh
-make setup-ecr AWS_REGION=your-aws-region
+npm run build
+cdk deploy
 ```
+
 This will:
-- Create an ECR repository if it doesn't exist
-- Pull the necessary Nvidia container from NGC
-- Tag it appropriately for your ECR repository
-- Push the container to your ECR
+- Create a new VPC with public and private subnets
+- Deploy an EKS cluster with GPU-enabled node groups
+- Install the NVIDIA GPU Operator
+- Configure ArgoCD for GitOps-based deployments
+- Set up AWS Load Balancer Controller
+- Configure IAM roles and security groups
 
-You can view all available Makefile commands with:
-```sh
-make help
-```
+You can monitor the deployment progress in the AWS Console under CloudFormation.
 
 ### Set up Development Environment in SageMaker Studio
 
@@ -106,12 +101,12 @@ From within your SageMaker Studio environment:
 
 1. Clone the repository
 ```sh
-git clone https://github.com/aws-samples/fraud-detection-blueprint-with-triton
+git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
 ```
 
 2. Set up the required conda environment
 ```sh
-conda env create -f ./fraud-detection-blueprint-with-triton/conda/notebook_env.yaml
+conda env create -f ./financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
 conda activate notebook_env
 ```
 
@@ -125,8 +120,8 @@ conda activate notebook_env
 Follow the step-by-step instructions in the notebook to:
 1. Preprocess the financial transaction data
 2. Train the fraud detection model using the Nvidia container on SageMaker
-3. Deploy the trained model to Triton Inference Server
-4. Set up the inference pipeline on EC2/ECS
+3. Deploy the trained model to Triton Inference Server on EKS
+4. Configure the ArgoCD deployment for automated model updates
 
 For detailed troubleshooting and additional configuration options, refer to the
 documentation in the `docs` directory.
