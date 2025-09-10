@@ -19,3 +19,7 @@ notebooks/*.json
 cdk.context.json
 cdk.out/
 .cdk.staging
+
+# Security scan results
+*.sarif
+probe-test-results.json
