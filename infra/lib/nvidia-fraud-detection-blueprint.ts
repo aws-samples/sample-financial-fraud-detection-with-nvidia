@@ -100,7 +100,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
     })
 
 
-    const repoUrl = "git@ssh.gitlab.aws.dev:ahsanrm/nvidia-fraud-detection-blueprint-on-aws.git";
+    const repoUrl = "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia";
 
 
     const addons = [
@@ -114,8 +114,6 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
           repoUrl: repoUrl,
           targetRevision: 'main',
           path: 'infra/manifests/argocd',
-          credentialsSecretName: "nvidia-gitlab-token", // Doesnt work with gitlab - needs to be resolved
-          credentialsType: 'TOKEN'
         },
         bootstrapValues: {
           repoUrl: repoUrl,
@@ -176,7 +174,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
           reason: 'Control plane logging is enabled through EKS blueprints configuration',
           appliesTo: [
             'LogExport::api',
-            'LogExport::audit', 
+            'LogExport::audit',
             'LogExport::authenticator',
             'LogExport::controllerManager',
             'LogExport::scheduler'

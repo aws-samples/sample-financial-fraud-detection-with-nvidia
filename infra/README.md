@@ -1,15 +1,23 @@
-# Infrastructure Overview
+# NVIDIA Fruad Detection CDK Blueprint Infrastructure Overview
 
 This directory contains the AWS CDK infrastructure code for deploying the Nvidia Fraud Detection Blueprint. The infrastructure uses AWS CDK with TypeScript and the EKS Blueprints framework to create a production-ready Kubernetes cluster optimized for GPU workloads.
 
 ## Architecture Components
 
+### EKS Stack
+
 - **Amazon EKS Cluster** - Managed Kubernetes cluster using EKS Blueprints
+- **VPC and Networking** - Custom VPC with public/private subnets across 3 AZs
 - **GPU Node Pool** - Dedicated node group for GPU workloads using g4dn instances
 - **AWS Load Balancer Controller** - For ingress management
 - **NVIDIA GPU Operator** - For GPU support in Kubernetes
 - **AWS Secrets Store** - For managing sensitive information
 - **ArgoCD** - For GitOps-based deployment management
+
+### Model Extraction Stack
+
+- **S3 Bucket** - Model registry for trained fraud detection models
+- **Lambda Function** - Automated model extraction and deployment pipeline
 
 ## Key Features
 
@@ -22,53 +30,77 @@ This directory contains the AWS CDK infrastructure code for deploying the Nvidia
 
 ## Prerequisites
 
-- Node.js 14.x or later
+- Node.js 20.x or later
 - AWS CDK CLI installed (`npm install -g aws-cdk`)
 - AWS CLI configured with appropriate credentials
-- Docker (for CDK asset bundling)
-- TypeScript knowledge for infrastructure modifications
+- AWS Account with permissions to create EKS, EC2, S3, Lambda, and IAM resources
 
 ## Setup Instructions
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
-2. Bootstrap CDK (if not already done):
+2. Bootstrap CDK with `nvidia` qualifier (First time only):
+
 ```bash
-cdk bootstrap aws://<ACCOUNT>/<REGION>
+npx cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
 ```
 
 3. Configure environment variables:
+
 ```bash
+# AWS Configuration
 export CDK_DEFAULT_ACCOUNT=<your-account>
 export CDK_DEFAULT_REGION=<your-region>
+
+# Optional: Training output bucket configuration (defaults to "ml-on-containers")
+export MODEL_BUCKET_NAME=your-custom-bucket-name
 ```
 
 4. Deploy the stack:
+
 ```bash
-npm run build
-cdk deploy
+npx cdk deploy --all
+
+# You can also pass in your bucket name as a command line argument during deployment
+npx cdk deploy --all --context modelBucketName=your-custom-bucket-name
 ```
 
-## Available CDK Stacks
+## Verify Deployment
 
-- `NvidiaFraudDetectionBlueprint` - Main infrastructure stack that creates:
-  - VPC and networking components
-  - EKS cluster with GPU support
-  - Required IAM roles and policies
-  - ArgoCD setup for GitOps
-  - GPU node pool configuration
+Once the stack deploys:
 
-## Useful Commands
+1. **Check EKS Cluster**
 
-* `npm run build`   compile TypeScript to JavaScript
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+```bash
+aws eks update-kubeconfig --region <aws-region> --name ClusterBlueprint
+kubectl get nodes
+```
+
+2. Verify GPU Nodes
+
+```bash
+kubectl get nodes -l node-type=gpu
+kubectl describe node <gpu-node-name>
+```
+
+3. Check Triton Server Deployment
+
+```bash
+kubectl get deployment -n triton
+```
+
+## Cleanup
+
+To destroy the infrastructure:
+
+```bash
+# Delete all stacks
+cdk destroy --all
+```
 
 ## Customization
 
