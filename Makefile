@@ -8,11 +8,8 @@ AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output t
 
 # Container Registry Configuration
 ECR_REPO_NAME := nvidia-fraud-detection
-NVIDIA_BASE_IMAGE := nvcr.io/nvidia/pytorch:22.12-py3
+NVIDIA_BASE_IMAGE := nvcr.io/nvidia/cugraph/financial-fraud-training:1.0.0
 ECR_IMAGE_URI := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO_NAME):latest
-
-# Build Configuration
-DOCKERFILE_DIR := ./container
 
 # Colors for terminal output
 YELLOW := \033[0;33m
@@ -86,17 +83,6 @@ push-image: create-ecr ecr-login tag-image
 	@echo "$(YELLOW)Pushing image to ECR...$(NC)"
 	@docker push $(ECR_IMAGE_URI)
 	@echo "$(GREEN)Successfully pushed image to ECR: $(ECR_IMAGE_URI)$(NC)"
-
-# Build custom container (if needed)
-build-custom:
-	@if [ -d "$(DOCKERFILE_DIR)" ] && [ -f "$(DOCKERFILE_DIR)/Dockerfile" ]; then \
-		echo "$(YELLOW)Building custom container...$(NC)"; \
-		docker build -t $(ECR_REPO_NAME):latest $(DOCKERFILE_DIR); \
-		docker tag $(ECR_REPO_NAME):latest $(ECR_IMAGE_URI); \
-		echo "$(GREEN)Successfully built custom container.$(NC)"; \
-	else \
-		echo "$(YELLOW)No Dockerfile found in $(DOCKERFILE_DIR). Skipping custom build.$(NC)"; \
-	fi
 
 # Complete ECR setup process
 setup-ecr: check-deps create-ecr pull-nvidia-image tag-image push-image
