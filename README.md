@@ -1,12 +1,8 @@
 # Getting Started - AWS Edition
 
 ## Overview
-This Nvidia AI Blueprint along with the AWS Deployment guide
-provides a reference example to deploy an End to End financial fraud detection
-blueprint using Graph Neural Networks. We will leverage Nvidia's Triton inference
-server to host our models while we use Sagemaker for training the model and Amazon EKS (Elastic Kubernetes Service) to host it.
-server to host our models while we use Sagemaker for training the model and EKS (Kubernetes) to host it.
 
+This NVIDIA AI Blueprint along with the AWS Deployment guide provides a reference example to deploy an end-to-end financial fraud detection blueprint using Graph Neural Networks (GNNs). We will leverage NVIDIA 's Triton Inference Server to host our models while using Amazon Sagemaker for training the model and Amazon EKS (Elastic Kubernetes Service) to host it.
 This is the general architecture diagram for how we host the blueprint on AWS.
 
 ![Architecture diagram showing the end-to-end AWS deployment workflow: A
