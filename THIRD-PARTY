@@ -1,0 +1,116 @@
+** category_encoders; version 2.8.0 -- https://github.com/scikit-learn-contrib/category_encoders
+Copyright (c) 2016, Will McGinnis
+License: BSD-3-Clause
+
+** numpy; version 1.26.4 -- https://github.com/numpy/numpy
+Copyright (c) 2005-2023, NumPy Developers
+License: BSD-3-Clause
+
+** matplotlib; version 3.10.1 -- https://github.com/matplotlib/matplotlib
+Copyright (c) 2012-2023 Matplotlib Development Team
+License: PSF-based (matplotlib license)
+
+** seaborn; version 0.13.2 -- https://github.com/mwaskom/seaborn
+Copyright (c) 2012-2023, Michael Waskom
+License: BSD-3-Clause
+
+** pandas; version 2.2.3 -- https://github.com/pandas-dev/pandas
+Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team
+License: BSD-3-Clause
+
+** scikit-learn; version 1.6.1 -- https://github.com/scikit-learn/scikit-learn
+Copyright (c) 2007-2023 The scikit-learn developers
+License: BSD-3-Clause
+
+** tritonclient; version 2.55.0 -- https://github.com/triton-inference-server/client
+Copyright (c) 2019-2023, NVIDIA CORPORATION
+License: BSD-3-Clause
+
+** boto3 -- https://github.com/boto/boto3
+Copyright 2013-2023 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** botocore -- https://github.com/boto/botocore
+Copyright 2012-2023 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** grpcio -- https://github.com/grpc/grpc
+Copyright 2015 gRPC authors
+License: Apache-2.0
+
+** cudf; version 24.12.* -- https://github.com/rapidsai/cudf
+Copyright (c) 2018-2023, NVIDIA CORPORATION
+License: Apache-2.0
+
+** notebook; version >=0.5.0 -- https://github.com/jupyter/notebook
+Copyright (c) Jupyter Development Team
+License: BSD-3-Clause
+
+** aws-cdk; version 2.1020.2 -- https://github.com/aws/aws-cdk
+Copyright 2018-2023 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** aws-cdk-lib; version 2.204.0 -- https://github.com/aws/aws-cdk
+Copyright 2018-2023 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** @aws-quickstart/eks-blueprints; version 1.17.2 -- https://github.com/aws-quickstart/cdk-eks-blueprints
+Copyright 2021 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** cdk-nag; version 2.37.13 -- https://github.com/cdklabs/cdk-nag
+Copyright Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** constructs; version 10.0.5 -- https://github.com/aws/constructs
+Copyright 2019 Amazon.com, Inc. or its affiliates
+License: Apache-2.0
+
+** IBM TabFormer Dataset -- https://github.com/IBM/TabFormer
+Copyright (c) IBM Corp. 2021
+License: Apache-2.0
+Note: Dataset preprocessing code adapted from IBM TabFormer project
+
+** TypeScript; version 5.6.3 -- https://github.com/microsoft/TypeScript
+Copyright (c) Microsoft Corporation
+License: Apache-2.0
+
+** Jest; version 29.7.0 -- https://github.com/facebook/jest
+Copyright (c) Meta Platforms, Inc. and affiliates
+License: MIT
+
+** ts-jest; version 29.2.5 -- https://github.com/kulshekhar/ts-jest
+Copyright (c) 2016-2018 Kulshekhar Kabra
+License: MIT
+
+** ts-node; version 10.9.2 -- https://github.com/TypeStrong/ts-node
+Copyright (c) 2014 Blake Embrey
+License: MIT
+
+** requirements; version 2.0.2 -- https://github.com/requirements/requirements
+License: MIT
+
+================================================================================
+
+NVIDIA CORPORATION CODE:
+** NVIDIA Triton Inference Server Container Images
+Copyright (c) 2019-2023, NVIDIA CORPORATION
+License: Apache-2.0
+Source: nvcr.io/nvidia/tritonserver
+Note: Container images pulled from NVIDIA NGC registry
+
+** NVIDIA CUDA Runtime
+Copyright (c) NVIDIA CORPORATION
+License: NVIDIA Software License Agreement
+Note: CUDA runtime included in conda environment
+
+** NVIDIA cuDF (RAPIDS)
+Copyright (c) 2018-2023, NVIDIA CORPORATION
+License: Apache-2.0
+Source: https://github.com/rapidsai/cudf
+Note: GPU-accelerated DataFrame library
+
+================================================================================
+
+AMAZON TEAM CODE:
+No code from other Amazon teams is included in this project.
