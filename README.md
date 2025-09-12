@@ -2,7 +2,11 @@
 
 ## Overview
 
-This NVIDIA AI Blueprint along with the AWS Deployment guide provides a reference example to deploy an end-to-end financial fraud detection blueprint using Graph Neural Networks (GNNs). We will leverage NVIDIA 's Triton Inference Server to host our models while using Amazon Sagemaker for training the model and Amazon EKS (Elastic Kubernetes Service) to host it.
+This NVIDIA AI Blueprint along with the AWS Deployment guide provides a
+reference example to deploy an end-to-end financial fraud detection blueprint
+using Graph Neural Networks (GNNs). We will leverage NVIDIA 's Triton Inference
+Server to host our models while using Amazon Sagemaker for training the model
+and Amazon EKS (Elastic Kubernetes Service) to host it.
 
 This is the general architecture diagram for how we host the blueprint on AWS.
 
@@ -27,6 +31,19 @@ the complete pipeline from development to production deployment.](./docs/arch-di
 6. For inference, we deploy Nvidia Triton on an EKS cluster with GPU-enabled nodes
    (g4dn instances) that reads the model from S3 and serves it through a load-balanced
    endpoint.
+
+
+Disclaimer: Sample code, software libraries, command line tools, proofs of
+concept, templates, or other related technology are provided as AWS Content or
+Third-Party Content under the AWS Customer Agreement, or the relevant written
+agreement between you and AWS (whichever applies). You should not use this AWS
+Content or Third-Party Content in your production accounts, or on production or
+other critical data. You are responsible for testing, securing, and optimizing
+the AWS Content or Third-Party Content, such as sample code, as appropriate for
+production grade use based on your specific quality control practices and
+standards. Deploying AWS Content or Third-Party Content may incur AWS charges
+for creating or using AWS chargeable resources, such as running Amazon EC2
+instances or using Amazon S3 storage.
 
 ## Prerequisites
 
@@ -91,6 +108,22 @@ This will:
 - Configure IAM roles and security groups
 
 You can monitor the deployment progress in the AWS Console under CloudFormation.
+
+### Prepare Nvidia training container
+
+From your local machine with Docker installed, AWS CLI configured, and an Nvidia NGC API Key. You will download and
+push a copy of the financial fraud training container from Nvidia to AWS ECR.
+
+We have included a `Makefile` for this to be convenient, all you need is all the credentials configured in the local environment
+and run:
+```bash
+make setup-ecr
+```
+
+This will download the `financial-fraud-training` container from NGC to your
+local instance then check if there is an ECR repo with the name
+`nvidia-fraud-detection` to then create and push the image just downloaded from
+NGC.
 
 ### Set up Development Environment in SageMaker Studio
 
