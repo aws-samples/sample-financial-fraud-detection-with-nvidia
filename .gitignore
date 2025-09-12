@@ -22,4 +22,4 @@ cdk.out/
 
 # Security scan results
 *.sarif
-probe-test-results.json
+probe-test-results.json.DS_Store
