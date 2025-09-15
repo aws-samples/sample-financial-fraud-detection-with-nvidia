@@ -9,7 +9,7 @@ const app = new cdk.App();
 // Add CDK Nag checks
 cdk.Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
 
-const modelBucketName = "ml-on-containers-gfs"
+const modelBucketName = "ml-on-containers"
 new NvidiaFraudDetectionBlueprint(app, 'NvidiaFraudDetectionBlueprint', {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
   modelBucketName: modelBucketName + "-model-registry",
