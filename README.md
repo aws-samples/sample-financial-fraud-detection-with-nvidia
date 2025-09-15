@@ -114,12 +114,12 @@ From within your SageMaker Studio environment:
 
 1. Clone the repository
 ```sh
-git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
+git clone https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git
 ```
 
 2. Set up the required conda environment
 ```sh
-conda env create -f ./financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
+conda env create -f ./sample-financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
 conda activate notebook_env
 ```
 
