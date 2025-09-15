@@ -297,7 +297,7 @@ def handler(event, context):
             'Action::s3:Abort*',
             'Action::s3:DeleteObject*',
             'Resource::*',
-            'Resource::arn:aws:s3:::ml-on-containers/*',
+            'Resource::arn:aws:s3:::ml-on-containers-gfs/*',
             'Resource::<ModelRegistryBucketBC3B3633.Arn>/*'
           ]
         },
