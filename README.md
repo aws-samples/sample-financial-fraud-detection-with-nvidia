@@ -72,13 +72,13 @@ aws configure
 npm install
 ```
 
-2. Bootstrap CDK with `nvidia` qualifier (First time only):
+3. Bootstrap CDK with `nvidia` qualifier (First time only):
 
 ```bash
 npx cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
 ```
 
-3. Configure environment variables:
+4. Configure environment variables:
 
 ```bash
 # AWS Configuration
@@ -89,7 +89,7 @@ export CDK_DEFAULT_REGION=<your-region>
 export MODEL_BUCKET_NAME=your-custom-bucket-name
 ```
 
-4. Deploy the stack:
+5. Deploy the stack:
 
 ```bash
 npx cdk deploy --all
