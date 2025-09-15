@@ -1,9 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as eks from 'aws-cdk-lib/aws-eks';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as blueprints from '@aws-quickstart/eks-blueprints'
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -97,7 +95,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
       namespace: "triton",
       serviceAccountName: "triton-sa",
       serviceAccountPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3ReadOnlyAccess')]
-    })
+    });
 
 
     const repoUrl = "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia";
