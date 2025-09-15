@@ -65,21 +65,37 @@ git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
 cd financial-fraud-detection-with-nvidia/infra
 ```
 
-2. Configure your AWS credentials
-```sh
+2. Configure your AWS credentials and install dependencies:
+
+```bash
 aws configure
-```
-
-3. Install dependencies and bootstrap CDK
-```sh
 npm install
-cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
 ```
 
-4. Deploy the EKS cluster and supporting infrastructure
-```sh
-npm run build
-cdk deploy
+2. Bootstrap CDK with `nvidia` qualifier (First time only):
+
+```bash
+npx cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
+```
+
+3. Configure environment variables:
+
+```bash
+# AWS Configuration
+export CDK_DEFAULT_ACCOUNT=<your-account>
+export CDK_DEFAULT_REGION=<your-region>
+
+# Optional: Training output bucket configuration (defaults to "ml-on-containers")
+export MODEL_BUCKET_NAME=your-custom-bucket-name
+```
+
+4. Deploy the stack:
+
+```bash
+npx cdk deploy --all
+
+# You can also pass in your bucket name as a command line argument during deployment
+npx cdk deploy --all --context modelBucketName=your-custom-bucket-name
 ```
 
 This will:
