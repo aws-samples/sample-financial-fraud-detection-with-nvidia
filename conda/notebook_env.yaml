@@ -20,8 +20,8 @@ channels:
 - nvidia
 dependencies:
 - conda-forge::category_encoders
-- cuda-version=12.1
-- cudf==24.12.*
+- cuda-version=12.9
+- cudf==25.08.*
 - conda-forge::matplotlib
 - seaborn>=0.12.2
 - pandas>=2.2.2
@@ -29,7 +29,11 @@ dependencies:
 - scikit-learn>=1.6.1
 - notebook>=0.5.0
 - tritonclient>=2.16.0
+<<<<<<< HEAD
 - boto3
 - botocore
 - grpcio
 name: notebook_env
+=======
+name: fraud_blueprint_env
+>>>>>>> 385e521 (update notebook to use fraud-training-container 2.0.0)
