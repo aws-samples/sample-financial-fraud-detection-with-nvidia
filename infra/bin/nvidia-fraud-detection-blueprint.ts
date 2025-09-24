@@ -20,7 +20,10 @@ const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
 
 const modelBucket = new S3BucketStack(app, 'NvidiaFraudDetectionBlueprintBucket', {
   env: env,
-  bucketName: modelBucketName
+  bucketName: modelBucketName,
+  synthesizer: new cdk.DefaultStackSynthesizer({
+    qualifier: 'nvidia', // Must match the qualifier used in bootstrap
+  }),
 });
 
 const tarExtractorStack = new TarExtractorStack(app, 'NvidiaFraudDetectionBlueprintModelExtractor', {
@@ -33,11 +36,17 @@ const tarExtractorStack = new TarExtractorStack(app, 'NvidiaFraudDetectionBluepr
 
 const sagemakerExecutionRole = new SageMakerExecutionRoleStack(app, 'NvidiaFraudDetectionTrainingRole', {
   env: env,
-  modelBucketArn: "arn:aws:s3:::" + modelBucketName
+  modelBucketArn: "arn:aws:s3:::" + modelBucketName,
+  synthesizer: new cdk.DefaultStackSynthesizer({
+    qualifier: 'nvidia', // Must match the qualifier used in bootstrap
+  }),
 });
 
 const trainingImageRepo = new BlueprintECRStack(app, 'NvidiaFraudDetectionTrainingImageRepo', {
-  env: env
+  env: env,
+  synthesizer: new cdk.DefaultStackSynthesizer({
+    qualifier: 'nvidia', // Must match the qualifier used in bootstrap
+  }),
 })
 
 const mainStack = new NvidiaFraudDetectionBlueprint(app, 'NvidiaFraudDetectionBlueprint', {
