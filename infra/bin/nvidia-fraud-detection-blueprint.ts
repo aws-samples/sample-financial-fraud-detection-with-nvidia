@@ -5,6 +5,7 @@ import { NvidiaFraudDetectionBlueprint } from '../lib/nvidia-fraud-detection-blu
 import { TarExtractorStack } from '../lib/tar-extractor-stack';
 import { SageMakerExecutionRoleStack } from '../lib/sagemaker-training-role';
 import { BlueprintECRStack } from '../lib/training-image-repo';
+import { S3BucketStack } from '../lib/model-bucket';
 
 const app = new cdk.App();
 
@@ -16,6 +17,11 @@ const env = {
 }
 
 const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
+
+const modelBucket = new S3BucketStack(app, 'NvidiaFraudDetectionBlueprintBucket', {
+  env: env,
+  bucketName: modelBucketName
+});
 
 const tarExtractorStack = new TarExtractorStack(app, 'NvidiaFraudDetectionBlueprintModelExtractor', {
   env: env,
