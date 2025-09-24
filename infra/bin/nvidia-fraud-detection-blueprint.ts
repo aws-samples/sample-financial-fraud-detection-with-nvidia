@@ -9,16 +9,18 @@ const app = new cdk.App();
 // Add CDK Nag checks
 cdk.Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
 
-const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
+
+const modelBucketName = app.node.tryGetContext('modelBucketName') || process.env.MODEL_BUCKET_NAME || "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
+
 new NvidiaFraudDetectionBlueprint(app, 'NvidiaFraudDetectionBlueprint', {
-  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
   modelBucketName: modelBucketName + "-model-registry",
   synthesizer: new cdk.DefaultStackSynthesizer({
     qualifier: 'nvidia', // Must match the qualifier used in bootstrap
   }),
 });
 new TarExtractorStack(app, 'NvidiaFraudDetectionBlueprintModelExtractor', {
-  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' },
+  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
   modelBucketName: modelBucketName,
   synthesizer: new cdk.DefaultStackSynthesizer({
     qualifier: 'nvidia', // Must match the qualifier used in bootstrap

@@ -39,7 +39,7 @@ export class TarExtractorStack extends cdk.Stack {
       memorySize: 4096,
       environment: {
         DESTINATION_BUCKET: destinationBucket.bucketName,
-        SSM_PARAMETER_NAME: '/triton/model',
+        SSM_PARAMETER_NAME: props.ssmParameter || '/triton/model',
       },
       code: lambda.Code.fromInline(`
 import json
@@ -297,7 +297,7 @@ def handler(event, context):
             'Action::s3:Abort*',
             'Action::s3:DeleteObject*',
             'Resource::*',
-            'Resource::arn:aws:s3:::ml-on-containers/*',
+            `Resource::arn:aws:s3:::${props.modelBucketName}/*`,
             'Resource::<ModelRegistryBucketBC3B3633.Arn>/*'
           ]
         },
