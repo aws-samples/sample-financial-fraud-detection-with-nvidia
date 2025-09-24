@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
+import * as ssm from 'aws-cdk-lib/aws-ssm'
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -19,7 +20,21 @@ export class TarExtractorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TarExtractorStackProps) {
     super(scope, id, props);
 
-    const sourceBucket = s3.Bucket.fromBucketName(this, 'ModelBucket', props.modelBucketName)
+    const sourceBucket = new s3.Bucket(this, 'ModelBucket', {
+      bucketName: props.modelBucketName,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      serverAccessLogsPrefix: 'access-logs/',
+      enforceSSL: true,
+      encryption: s3.BucketEncryption.S3_MANAGED
+
+    })
+
+    const sourceBucketSSM = new ssm.StringParameter(this, 'ModelBucketParam', {
+      parameterName: "/triton/model-repository",
+      stringValue: sourceBucket.bucketName
+
+    })
 
     // Destination bucket for extracted files
     const destinationBucket = new s3.Bucket(this, 'ModelRegistryBucket', {
