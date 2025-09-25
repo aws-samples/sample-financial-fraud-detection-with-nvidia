@@ -23,5 +23,9 @@ export class BlueprintECRStack extends cdk.Stack {
     new cdk.CfnOutput(this, "TrainingImageRepo", {
       value: repo.repositoryName,
     });
+
+    new cdk.CfnOutput(this, "TrainingImageRepoUri", {
+      value: repo.repositoryUri
+    });
   }
 }

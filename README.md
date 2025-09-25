@@ -36,7 +36,8 @@ To successfully deploy this blueprint, you will need:
 and ECR resources
 
 2. **Nvidia NGC API Key** - required to access Nvidia's container registry and models
-  - Please refer to the [Nvidia NGC
+
+- Please refer to the [Nvidia NGC
     documentation](https://docs.nvidia.com/ngc/ngc-overview/index.html#generating-api-key)
     for instructions on obtaining your API key
 
@@ -60,6 +61,7 @@ and ECR resources
 From your local machine with Node.js and AWS CDK installed:
 
 1. Clone this repository
+
 ```sh
 git clone https://github.com/aws-samples/financial-fraud-detection-with-nvidia
 cd financial-fraud-detection-with-nvidia/infra
@@ -99,6 +101,7 @@ npx cdk deploy --all --context modelBucketName=your-custom-bucket-name
 ```
 
 This will:
+
 - Create a new VPC with public and private subnets
 - Deploy an EKS cluster with GPU-enabled node groups
 - Install the NVIDIA GPU Operator
@@ -108,16 +111,54 @@ This will:
 
 You can monitor the deployment progress in the AWS Console under CloudFormation.
 
+### Upload the NVIDIA Training Image to ECR
+
+Login to the NVIDIA Docker Registry and pull the image:
+
+```bash
+export NGC_API_KEY=<your-api-key>
+docker login nvcr.io --username '$oauthtoken' --password $NGC_API_KEY
+
+docker pull nvcr.io/nvidia/cugraph/financial-fraud-training:2.0.0
+```
+
+Get the ECR URI from the cloudformation stack:
+
+```bash
+export NVIDIA_ECR_URI=$(aws cloudformation describe-stacks \
+  --stack-name NvidiaFraudDetectionTrainingImageRepo \
+  --query "Stacks[0].Outputs[?OutputKey=='TrainingImageRepoUri'].OutputValue" \
+  --output text)
+```
+
+Login to ECR:
+
+```bash
+
+export ECR_REPO=$(echo "${NVIDIA_ECR_URI%%/*}")
+aws ecr get-login-password --region region | docker login --username AWS --password-stdin $ECR_REPO
+```
+
+Tag the NVIDIA Image and push it to ECR:
+
+```bash
+
+docker tag nvcr.io/nvidia/cugraph/financial-fraud-training:2.0.0 $NVIDIA_ECR_URI:latest
+docker push $NVIDIA_ECR_URI:latest
+```
+
 ### Set up Development Environment in SageMaker Studio
 
 From within your SageMaker Studio environment:
 
 1. Clone the repository
+
 ```sh
 git clone https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git
 ```
 
 2. Set up the required conda environment
+
 ```sh
 conda env create -f ./sample-financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
 conda activate notebook_env
@@ -131,6 +172,7 @@ conda activate notebook_env
 ### Running the Solution
 
 Follow the step-by-step instructions in the notebook to:
+
 1. Preprocess the financial transaction data
 2. Train the fraud detection model using the Nvidia container on SageMaker
 3. Deploy the trained model to Triton Inference Server on EKS
@@ -148,6 +190,7 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 This library is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.
 
 ## Authors
+
 - Shardul Vaidya, AWS NGDE Architect
 - Ragib Ahsan, AWS AI Acceleration Architect
 - Zachary Jacobson, AWS Partner Solutions Architect
