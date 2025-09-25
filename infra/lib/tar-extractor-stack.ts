@@ -337,6 +337,17 @@ def handler(event, context):
       ]
     );
 
+    //NagSuppressions.addResourceSuppressionsByPath(
+    //  this,
+    //  '/NvidiaFraudDetectionBlueprintModelExtractor/TarExtractorFunction/ServiceRole/DefaultPolicy/Resource',
+    //  [
+    //    {
+    //      id: 'AwsSolution-IAM5',
+    //      reason: ''
+    //    }
+    //  ]
+    //);
+
     // Suppress bucket notifications handler default policy warnings
     NagSuppressions.addResourceSuppressionsByPath(
       this,

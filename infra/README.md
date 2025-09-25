@@ -43,10 +43,10 @@ This directory contains the AWS CDK infrastructure code for deploying the Nvidia
 npm install
 ```
 
-2. Bootstrap CDK with `nvidia` qualifier (First time only):
+2. Bootstrap CDK (First time only):
 
 ```bash
-npx cdk bootstrap aws://<ACCOUNT>/<REGION> --qualifier nvidia
+npx cdk bootstrap aws://<ACCOUNT>/<REGION>
 ```
 
 3. Configure environment variables:

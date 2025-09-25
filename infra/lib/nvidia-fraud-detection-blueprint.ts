@@ -97,17 +97,15 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
       serviceAccountPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3ReadOnlyAccess')]
     });
 
-
     const repoUrl = "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia";
-
 
     const addons = [
       new ALBDefaultIngressClassAddOn(),
-      new blueprints.GpuOperatorAddon({
+      new blueprints.addons.GpuOperatorAddon({
         version: "v25.3.2"
       }),
-      new blueprints.SecretsStoreAddOn(),
-      new blueprints.ArgoCDAddOn({
+      new blueprints.addons.SecretsStoreAddOn(),
+      new blueprints.addons.ArgoCDAddOn({
         bootstrapRepo: {
           repoUrl: repoUrl,
           targetRevision: 'main',
@@ -137,11 +135,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
       .addOns(...addons)
       .teams(triton)
       .resourceProvider(blueprints.GlobalResources.Vpc, new blueprints.DirectVpcProvider(vpc))
-      .build(this, "ClusterBlueprint", {
-        synthesizer: new cdk.DefaultStackSynthesizer({
-          qualifier: 'nvidia',
-        }),
-      });
+      .build(this, "ClusterBlueprint");
 
     // Add CDK Nag suppressions for legitimate AWS managed policies
     NagSuppressions.addResourceSuppressions(
