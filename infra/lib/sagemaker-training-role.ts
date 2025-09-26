@@ -15,7 +15,7 @@ export class SageMakerExecutionRoleStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
-    props?: SageMakerExecutionRoleStackProps,
+    props?: SageMakerExecutionRoleStackProps
   ) {
     super(scope, id, props);
 
@@ -31,16 +31,16 @@ export class SageMakerExecutionRoleStack extends cdk.Stack {
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSageMakerFullAccess"),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "AmazonSageMakerCanvasFullAccess",
+          "AmazonSageMakerCanvasFullAccess"
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "AmazonSageMakerCanvasAIServicesAccess",
+          "AmazonSageMakerCanvasAIServicesAccess"
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "AmazonSageMakerCanvasDataPrepFullAccess",
+          "AmazonSageMakerCanvasDataPrepFullAccess"
         ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          "AmazonSageMakerCanvasSMDataScienceAssistantAccess",
+          "AmazonSageMakerCanvasSMDataScienceAssistantAccess"
         ),
       ],
     });
@@ -87,26 +87,49 @@ export class SageMakerExecutionRoleStack extends cdk.Stack {
       ],
     });
 
+    // Custom inline policy for ECR access
+    const ecrPolicy = new iam.PolicyDocument({
+      statements: [
+        new iam.PolicyStatement({
+          sid: "ECRAccess",
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "ecr:BatchCheckLayerAvailability",
+            "ecr:BatchGetImage",
+            "ecr:GetDownloadUrlForLayer",
+          ],
+          resources: ["*"],
+        }),
+      ],
+    });
+
     // Attach inline policies to the role
     this.sagemakerRole.attachInlinePolicy(
       new iam.Policy(this, "SageMakerS3Policy", {
         policyName: "SageMaker-S3-Access",
         document: sagemakerS3Policy,
-      }),
+      })
     );
 
     this.sagemakerRole.attachInlinePolicy(
       new iam.Policy(this, "ParameterStorePolicy", {
         policyName: "parameter-store",
         document: parameterStorePolicy,
-      }),
+      })
     );
 
     this.sagemakerRole.attachInlinePolicy(
       new iam.Policy(this, "SageMakerStartSessionPolicy", {
         policyName: "sagemaker-start-session",
         document: sagemakerStartSessionPolicy,
-      }),
+      })
+    );
+
+    this.sagemakerRole.attachInlinePolicy(
+      new iam.Policy(this, "ECRPolicy", {
+        policyName: "ecr-access",
+        document: ecrPolicy,
+      })
     );
 
     // Output the role ARN
