@@ -16,7 +16,7 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
-const modelBucketName = "ml-on-containers2-" + process.env.CDK_DEFAULT_ACCOUNT;
+const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
 
 const tarExtractorStack = new TarExtractorStack(
   app,
