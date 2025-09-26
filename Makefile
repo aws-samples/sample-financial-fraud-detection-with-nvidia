@@ -3,12 +3,12 @@
 # the fraud detection blueprint project
 
 # AWS Configuration
-AWS_REGION ?= us-west-2
+AWS_REGION ?= us-east-1
 AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text)
 
 # Container Registry Configuration
 ECR_REPO_NAME := nvidia-fraud-detection
-NVIDIA_BASE_IMAGE := nvcr.io/nvidia/cugraph/financial-fraud-training:1.0.0
+NVIDIA_BASE_IMAGE := nvcr.io/nvidia/cugraph/financial-fraud-training:2.0.0
 ECR_IMAGE_URI := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO_NAME):latest
 
 # Colors for terminal output
