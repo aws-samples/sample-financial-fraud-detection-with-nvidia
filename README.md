@@ -157,12 +157,14 @@ From within your SageMaker Studio environment:
 git clone https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git
 ```
 
-2. Set up the required conda environment
+2. Set up the required conda environment from a terminal within the JupyterLab environment
 
 ```sh
 conda env create -f ./sample-financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
 conda install -y ipykernel -n fraud_blueprint_env
-python -m ipykernel install --user --name fraud_blueprint_env --display-name "fraud_blueprint_env"
+conda init
+conda activate fraud_blueprint_env
+python -m ipykernel install --user --name fraud_blueprint_env --display-name fraud_blueprint_env
 ```
 
 3. Open the notebook and follow the instructions
