@@ -161,7 +161,8 @@ git clone https://github.com/aws-samples/sample-financial-fraud-detection-with-n
 
 ```sh
 conda env create -f ./sample-financial-fraud-detection-with-nvidia/conda/notebook_env.yaml
-conda activate notebook_env
+conda install -y ipykernel -n fraud_blueprint_env
+python -m ipykernel install --user --name fraud_blueprint_env --display-name "fraud_blueprint_env"
 ```
 
 3. Open the notebook and follow the instructions
