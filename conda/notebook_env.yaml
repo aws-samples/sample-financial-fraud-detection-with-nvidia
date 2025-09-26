@@ -29,11 +29,8 @@ dependencies:
 - scikit-learn>=1.6.1
 - notebook>=0.5.0
 - tritonclient>=2.16.0
-<<<<<<< HEAD
 - boto3
 - botocore
 - grpcio
-name: notebook_env
-=======
+
 name: fraud_blueprint_env
->>>>>>> 385e521 (update notebook to use fraud-training-container 2.0.0)
