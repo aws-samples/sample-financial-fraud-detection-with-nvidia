@@ -32,7 +32,7 @@ help:
 	@echo "  push-image         : Push tagged image to ECR"
 	@echo "  setup-ecr          : Complete ECR setup process (all steps)"
 	@echo "  clean              : Clean up local Docker images"
-	@echo ""
+	@echo "  setup-conda        : Setup conda environment in Sagemaker"
 	@echo "$(YELLOW)Example:$(NC)"
 	@echo "  make setup-ecr AWS_REGION=us-east-1"
 
@@ -98,3 +98,13 @@ clean:
 	-docker rmi $(ECR_IMAGE_URI) 2>/dev/null || true
 	-docker rmi $(NVIDIA_BASE_IMAGE) 2>/dev/null || true
 	@echo "$(GREEN)Cleanup complete.$(NC)"
+
+
+setup-conda:
+	@echo "$(YELLOW)Setting up conda environment...$(NC)"
+	-conda env create -f ./conda/notebook_env.yaml
+	-conda init
+	-conda activate fraud_blueprint_env
+	-conda install -y ipykernel -n fraud_blueprint_env
+	-python -m ipykernel install --user --name fraud_blueprint_env --display-name "fraud_blueprint_env"
+	@echo "$(GREEN)Conda environment setup complete.$(NC)"
