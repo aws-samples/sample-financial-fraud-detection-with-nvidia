@@ -65,7 +65,7 @@ ecr-login: check-deps
 pull-nvidia-image: check-deps
 	@echo "$(YELLOW)Pulling Nvidia base image from NGC...$(NC)"
 	@echo "This may take some time depending on your internet connection."
-	@if ! docker pull $(NVIDIA_BASE_IMAGE); then \
+	@if ! docker pull $(NVIDIA_BASE_IMAGE) --platform=linux/amd64; then \
 		echo "$(RED)Failed to pull Nvidia image. Make sure you're logged in to NGC registry.$(NC)"; \
 		echo "Run 'docker login nvcr.io' with your NGC API key as password and '\$$oauthtoken' as username."; \
 		exit 1; \
