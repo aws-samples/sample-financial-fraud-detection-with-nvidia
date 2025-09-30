@@ -88,18 +88,9 @@ spec:
         volumeMounts:
         - name: tmp-volume
           mountPath: /tmp
-        - name: home
-          mountPath: /home/triton-server
-        - name: opt-backend
-          mountPath: /opt/tritonserver
       volumes:
       - name: tmp-volume
         emptyDir: {}
-      - name: home
-        emptyDir: {}
-      - name: opt-backend
-        emptyDir: {}
       securityContext:
-        runAsUser: 1000
-        runAsNonRoot: true
-        fsGroup: 1000
+        runAsUser: 0
+        fsGroup: 0
