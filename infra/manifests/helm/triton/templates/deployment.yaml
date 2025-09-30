@@ -88,6 +88,8 @@ spec:
         volumeMounts:
         - name: tmp-volume
           mountPath: /tmp
+        - name: home
+          mountPath: /home/triton-server
       volumes:
       - name: tmp-volume
         emptyDir: {}
