@@ -93,6 +93,8 @@ spec:
       volumes:
       - name: tmp-volume
         emptyDir: {}
+      - name: home
+        emptyDir: {}
       securityContext:
         runAsUser: 1000
         runAsNonRoot: true
