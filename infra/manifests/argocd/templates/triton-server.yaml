@@ -15,7 +15,7 @@ spec:
           name: {{ .Values.serviceAccount.name }}
         replicaCount: 1
         image:
-          imageName: nvcr.io/nvidia/tritonserver:25.07-py3
+          imageName: {{ .Values.image.imageName }}
           pullPolicy: IfNotPresent
           modelRepositoryPath: s3://{{ .Values.bucketName }}/model-repository
           numGpus: 1
