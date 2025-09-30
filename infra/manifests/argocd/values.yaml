@@ -5,6 +5,11 @@ region: us-east-1
 serviceAccount:
   name: triton-sa
 
+image:
+  imageName: nvcr.io/nvidia/tritonserver:25.05-py3
+  pullPolicy: IfNotPresent
+  numGpus: 1
+
 bucketName: bucket
 namespace: triton
 
