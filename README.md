@@ -164,7 +164,7 @@ conda env create -f ./sample-financial-fraud-detection-with-nvidia/conda/noteboo
 conda install -y ipykernel -n fraud_blueprint_env
 conda init
 conda activate fraud_blueprint_env
-python -m ipykernel install --user --name fraud_blueprint_env --display-name fraud_blueprint_env
+python -m ipykernel install --user --name fraud_blueprint_env --display-name "user_env:(fraud_blueprint_env)"
 ```
 
 3. Open the notebook and follow the instructions
