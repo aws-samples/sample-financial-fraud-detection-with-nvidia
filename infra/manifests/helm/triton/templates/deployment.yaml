@@ -76,6 +76,7 @@ spec:
         - containerPort: 8007
           name: metrics
         livenessProbe:
+          initialDelaySeconds: 3600
           httpGet:
             path: /v2/health/live
             port: http
