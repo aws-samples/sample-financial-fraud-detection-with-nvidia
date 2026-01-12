@@ -1,5 +1,4 @@
 import * as cdk from "aws-cdk-lib";
-import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 
@@ -21,7 +20,6 @@ export interface NvidiaFraudDetectionBlueprintProps extends cdk.StackProps {
 }
 
 export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
-    public readonly vpc: ec2.Vpc;
     public readonly dataBucket: s3.Bucket;
     public readonly modelBucket: s3.Bucket;
     public readonly modelRegistryBucket: s3.Bucket;
@@ -32,19 +30,6 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
         props: NvidiaFraudDetectionBlueprintProps,
     ) {
         super(scope, id, props);
-
-        // Use existing VPC or create a new one
-        this.vpc = new ec2.Vpc(this, "TritonVpc", {
-            maxAzs: 3,
-            natGateways: 1,
-            enableDnsHostnames: true,
-            enableDnsSupport: true,
-            flowLogs: {
-                VpcFlowLog: {
-                    destination: ec2.FlowLogDestination.toCloudWatchLogs(),
-                },
-            },
-        });
 
         // Data Bucket
         this.dataBucket = new s3.Bucket(this, "DataBucket", {
@@ -80,17 +65,15 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
             this.modelRegistryBucket = this.modelBucket;
         }
 
-        // VPC Interface Endpoints for SageMaker (Optional but recommended for security/cost)
-        this.vpc.addInterfaceEndpoint("SageMakerRuntimeEndpoint", {
-            service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_RUNTIME,
+        // Outputs
+        new cdk.CfnOutput(this, "DataBucketName", {
+            value: this.dataBucket.bucketName,
+            exportName: "DataBucketName",
         });
 
-        this.vpc.addInterfaceEndpoint("SageMakerApiEndpoint", {
-            service: ec2.InterfaceVpcEndpointAwsService.SAGEMAKER_API,
-        });
-
-        this.vpc.addGatewayEndpoint("S3Endpoint", {
-            service: ec2.GatewayVpcEndpointAwsService.S3,
+        new cdk.CfnOutput(this, "ModelBucketName", {
+            value: this.modelBucket.bucketName,
+            exportName: "ModelBucketName",
         });
     }
 }
