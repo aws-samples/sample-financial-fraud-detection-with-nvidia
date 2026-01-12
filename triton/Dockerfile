@@ -7,10 +7,10 @@ ENV CONDA_DIR=/opt/miniconda
 
 # Install base dependencies and clean cache
 RUN apt-get update && apt-get install -y \
-    wget curl git build-essential cmake sudo \
-    # libnccl2 libnccl-dev \
-    libopenblas-dev libssl-dev libtinfo-dev \
-    && rm -rf /var/lib/apt/lists/*
+  wget curl git build-essential cmake sudo \
+  # libnccl2 libnccl-dev \
+  libopenblas-dev libssl-dev libtinfo-dev \
+  && rm -rf /var/lib/apt/lists/*
 
 
 # Ensure bash features and a stable PATH
@@ -20,23 +20,23 @@ ENV PATH=${CONDA_DIR}/bin:${PATH}
 
 
 RUN set -eux; \
-    ARCH="$(uname -m)"; \
-    if [ "$ARCH" = "aarch64" ]; then \
-      MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh"; \
-      CONDA_SUBDIR=linux-aarch64; \
-    else \
-      MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"; \
-      CONDA_SUBDIR=linux-64; \
-    fi; \
-    wget -q "$MINICONDA_URL" -O miniconda.sh; \
-    bash miniconda.sh -b -p "$CONDA_DIR"; \
-    rm miniconda.sh; \
-    conda config --set subdir "$CONDA_SUBDIR"; \
-    conda config --set always_yes true; \
-    # Accept TOS
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main; \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r; \
-    conda update -n base -c defaults conda
+  ARCH="$(uname -m)"; \
+  if [ "$ARCH" = "aarch64" ]; then \
+  MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh"; \
+  CONDA_SUBDIR=linux-aarch64; \
+  else \
+  MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"; \
+  CONDA_SUBDIR=linux-64; \
+  fi; \
+  wget -q "$MINICONDA_URL" -O miniconda.sh; \
+  bash miniconda.sh -b -p "$CONDA_DIR"; \
+  rm miniconda.sh; \
+  conda config --set subdir "$CONDA_SUBDIR"; \
+  conda config --set always_yes true; \
+  # Accept TOS
+  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main; \
+  conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r; \
+  conda update -n base -c defaults conda
 
 
 # Set Conda Python as default
@@ -54,16 +54,16 @@ RUN conda install python=3.12
 #     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 RUN conda install --override-channels -c nvidia -c conda-forge \
-    pytorch=2.7.0=*cuda126* \
-    py-xgboost=3.0.2=*cuda128* \
-    ncurses
+  pytorch=2.7.0=*cuda126* \
+  py-xgboost=3.0.2=*cuda128* \
+  ncurses
 
 RUN conda install  --override-channels -c conda-forge cupy=13.4.1
 # Install PyTorch Geometric and Captum for CUDA 12.6 + torch 2.7.0
 RUN $CONDA_DIR/bin/pip install \
-    torch-geometric==2.6.1 \
-    captum==0.7.0 \
-    --extra-index-url https://data.pyg.org/whl/torch-2.7.0+cu126.html
+  torch-geometric==2.6.1 \
+  captum==0.7.0 \
+  --extra-index-url https://data.pyg.org/whl/torch-2.7.0+cu126.html
 
 # RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
 #     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
@@ -77,3 +77,7 @@ RUN python -c "import captum; print('Captum:', captum.__version__)"
 RUN python -c "import torch_geometric; print('PyG:', torch_geometric.__version__)"
 
 # Entrypoint remains unchanged from Triton base image
+COPY serve /usr/local/bin/serve
+RUN chmod +x /usr/local/bin/serve
+
+ENV SAGEMAKER_PROGRAM serve
