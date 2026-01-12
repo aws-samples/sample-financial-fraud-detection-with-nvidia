@@ -42,6 +42,9 @@ export class SageMakerPreprocessingImageRepoStack extends cdk.Stack {
                 phases: {
                     pre_build: {
                         commands: [
+                            "echo Logging in to NGC...",
+                            "export NGC_API_KEY=$(aws secretsmanager get-secret-value --secret-id nvidia-ngc-api-key --query SecretString --output text)",
+                            "echo $NGC_API_KEY | docker login nvcr.io -u '$oauthtoken' --password-stdin",
                             "echo Logging in to Amazon ECR...",
                             "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com",
                             "echo Cloning repository...",
@@ -81,6 +84,14 @@ export class SageMakerPreprocessingImageRepoStack extends cdk.Stack {
         });
 
         this.repository.grantPullPush(this.buildProject);
+
+        // Grant CodeBuild permission to read NGC API key from Secrets Manager
+        this.buildProject.addToRolePolicy(
+            new iam.PolicyStatement({
+                actions: ["secretsmanager:GetSecretValue"],
+                resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:nvidia-ngc-api-key*`],
+            })
+        );
 
         // Custom Resource trigger (reusing the pattern)
         if (triggerBuildOnDeploy) {

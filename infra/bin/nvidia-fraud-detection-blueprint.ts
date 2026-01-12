@@ -25,6 +25,7 @@ const trainingImageRepo = new SageMakerTrainingImageRepoStack(
   "SageMakerTrainingImageRepoStack",
   {
     env: env,
+    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
     branch: "v2_sagemaker"
   },
 );
@@ -34,6 +35,7 @@ const preprocessingImageRepo = new SageMakerPreprocessingImageRepoStack(
   "SageMakerPreprocessingImageRepoStack",
   {
     env: env,
+    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
     branch: "v2_sagemaker"
   },
 );
@@ -44,6 +46,7 @@ const tritonImageRepo = new TritonImageRepoStack(
   "TritonImageRepoStack",
   {
     env: env,
+    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
     branch: "v2_sagemaker"
   },
 );

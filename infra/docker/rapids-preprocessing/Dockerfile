@@ -1,4 +1,4 @@
-FROM rapidsai/base:25.12-cuda13-py3.12
+FROM nvcr.io/nvidia/rapidsai/base:25.12-cuda13-py3.12
 
 # Install SageMaker toolkit and dependencies required by preprocess_TabFormer_lp.py
 RUN pip install --no-cache-dir \
