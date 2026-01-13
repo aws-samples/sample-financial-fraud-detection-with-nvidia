@@ -218,3 +218,4 @@ MIT-0 License. See [LICENSE](LICENSE).
 - Shardul Vaidya, AWS Partner Solutions Architect
 - Zachary Jacobson, AWS Partner Solutions Architect
 - Ragib Ahsan, AWS AI Acceleration Architect
+- Artiom Troyanovsky, Senior Machine Learning Engineer at Thoughtworks
