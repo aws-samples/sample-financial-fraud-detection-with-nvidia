@@ -6,25 +6,21 @@ The insight is simple. Fraudsters don't operate in isolation. They create patter
 
 ![Architecture](docs/arch-diagram.png)
 
-This implementation runs entirely on AWS using Kubeflow Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK, and ArgoCD handles the GitOps workflow for model updates.
+This implementation runs entirely on AWS using SageMaker Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK with a serverless, managed approach that eliminates cluster management overhead.
 
 ## The Pipeline
 
-When you trigger a pipeline run, five things happen in sequence.
+When you trigger a pipeline run, three stages execute:
 
-**Download** pulls the TabFormer dataset from S3. This is IBM's synthetic credit card transaction dataset containing 24 million transactions across 5,000 cardholders and 1,000 merchants. It's synthetic but statistically representative of real fraud patterns.
+**Preprocessing** transforms raw transactions into graph structure using RAPIDS. The TabFormer dataset (IBM's synthetic credit card dataset with 24 million transactions across 5,000 cardholders and 1,000 merchants) gets converted into a graph where cardholders and merchants become nodes, and transactions become edges. This runs on GPU-accelerated SageMaker Processing Jobs using custom RAPIDS containers. What would take hours with pandas completes in minutes with cuDF.
 
-**Preprocess** transforms raw transactions into graph structure. Each cardholder becomes a node, each merchant becomes a node, and transactions become edges connecting them. This stage runs on GPU using RAPIDS/cuDF because doing this transformation on 24 million rows with pandas would take hours. With cuDF it takes minutes.
+**Training** combines a Graph Neural Network (GraphSAGE) with XGBoost for fraud prediction. The GNN learns embeddings from the transaction graph structure while XGBoost handles the tabular features. SageMaker Training Jobs orchestrate this on GPU instances, automatically handling checkpointing, metrics logging, and artifact storage to S3.
 
-**Train** runs the actual model. The architecture combines a Graph Neural Network (specifically GraphSAGE) that learns embeddings from the transaction graph with XGBoost that makes the final fraud/not-fraud prediction. The GNN captures structural patterns. XGBoost captures tabular feature patterns. Together they outperform either alone.
-
-**Upload** packages the trained model in Triton's expected format and pushes it to S3. The model repository includes the GNN weights, XGBoost model, and a Python backend that computes Shapley values for explainability.
-
-**Serve** happens automatically. Triton polls the S3 model repository and loads new model versions as they appear. Within minutes of training completion, the new model serves inference requests.
+**Model Registration** packages the trained model and registers it in SageMaker Model Registry with approval workflow. The model includes GNN weights, XGBoost model, and integration with NVIDIA Triton for inference serving. Models awaiting approval can be reviewed in SageMaker Studio before deployment.
 
 ## Getting Started
 
-You'll need an AWS account with permissions for EKS, EC2, ECR, and S3. Locally you'll need Docker, Node.js 20+, AWS CLI, and kubectl. The full deployment takes about 30 minutes.
+You'll need an AWS account with permissions for SageMaker, ECR, S3, and IAM. Locally you'll need Docker, Node.js 20+, and AWS CLI. The deployment takes about 15 minutes.
 
 ```bash
 cd infra
@@ -37,112 +33,136 @@ npx cdk bootstrap aws://<ACCOUNT>/<REGION>
 export CDK_DEFAULT_ACCOUNT=<your-account>
 export CDK_DEFAULT_REGION=<your-region>
 
-# Deploy everything
+# Deploy the infrastructure
 npx cdk deploy --all
 ```
 
-This creates an EKS cluster with Karpenter-managed GPU node pools, installs Kubeflow via deployKF, configures ArgoCD, and sets up the S3 buckets and ECR repositories.
+This creates:
+- S3 buckets for data and models
+- ECR repositories for custom containers (RAPIDS preprocessing, training, Triton)
+- SageMaker execution roles with appropriate permissions
+- SageMaker Domain for Studio access
+- CodeBuild projects that automatically build container images
 
-Once deployment completes, update your kubeconfig and check that everything came up:
+The CDK deployment outputs the SageMaker execution role ARN and S3 bucket names. Save these for pipeline deployment.
+
+Once infrastructure deploys, upload your data to S3:
 
 ```bash
-aws eks update-kubeconfig --region <region> --name nvidia-fraud-detection-cluster-blueprint
-kubectl get pods -n kubeflow
+# Example: Upload TabFormer dataset
+aws s3 cp card_transaction.v1.csv s3://fraud-detection-<account>-sm/data/TabFormer/raw/
 ```
 
-Get the Kubeflow dashboard URL from the load balancer:
-
-```bash
-kubectl get svc -n deploykf-istio-gateway deploykf-gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-```
-
-Open the URL in your browser. The default credentials are `user@example.com` / `user`.
-
-![Kubeflow Dashboard](docs/img/deployKF-dashboard.png)
-
-The dashboard gives you access to pipelines, experiments, runs, and notebook servers. The left sidebar navigates between these. Most of your time will be spent in Pipelines and Notebooks.
+Access SageMaker Studio through the AWS Console at SageMaker → Domains → fraud-detection-domain → Studio. This gives you access to pipelines, experiments, model registry, and endpoints.
 
 ## Running Your First Pipeline
 
-The easiest path is the interactive notebook. A notebook server called `fraud-detection-demo` is automatically provisioned in the `team-1` namespace when the infrastructure deploys. Navigate to Notebooks in the sidebar to access it.
-
-![Notebook Servers](docs/img/deployKF-notebook-page.png)
-
-The notebook workspace comes pre-loaded with this repository, so you can immediately open `fraud-detection/notebooks/kubeflow-fraud-detection.ipynb`. The notebook is self-contained: it defines all pipeline components inline, submits runs to the Kubeflow API, and includes cells for monitoring progress and testing inference.
-
-Run through the notebook section by section:
-
-**Section 1** installs dependencies and auto-detects your AWS account and region. If detection fails, fill in the values manually.
-
-**Section 2** connects to the Kubeflow Pipelines API. Since you're running inside a Kubeflow notebook server, this happens automatically without authentication.
-
-**Section 3** defines the five pipeline components. Each component is a Python function decorated with `@dsl.component` or `@dsl.container_component`. Read through these to understand what each stage does.
-
-**Section 4** wires the components together into a pipeline with proper dependencies and resource requests. The GPU stages request `nvidia.com/gpu` accelerators and use node selectors to land on GPU nodes.
-
-**Section 5** submits the pipeline and gives you a run ID. Click the link to watch progress in the Kubeflow UI, or use the monitoring cell to poll status from the notebook.
-
-**Section 6** tests inference against Triton once training completes. It queries the model health endpoint and lists loaded models.
-
-If you prefer working with compiled pipelines, you can upload YAML directly:
-
-![Upload Pipeline](docs/img/deployKF-upload-pipelines-page.png)
+Deploy the pipeline definition to SageMaker:
 
 ```bash
 cd workflows
-pip install kfp==2.10.1 kfp-kubernetes==1.4.0
-python -m workflows.cudf_e2e_pipeline
+
+# Install dependencies
+uv sync
+
+# Deploy the pipeline (creates/updates the pipeline definition)
+python -m src.workflows.sagemaker_fraud_detection_pipeline \
+  --role-arn <sagemaker-execution-role-arn-from-cdk-output> \
+  --default-bucket fraud-detection-<account>-sm \
+  --region <your-region>
 ```
 
-This generates `fraud_detection_cudf_pipeline.yaml`. Upload it through the Pipelines UI, then create a run with your desired parameters.
+This registers the pipeline with SageMaker. You can now trigger runs through:
+
+**SageMaker Studio UI**: Navigate to Pipelines → FraudDetectionPipeline → Create execution. Adjust hyperparameters if needed, then start the run. The Studio interface shows real-time progress, logs, and metrics.
+
+**Python SDK**: From a notebook or script:
+
+```python
+from sagemaker.mlops.workflow.pipeline import Pipeline
+
+pipeline = Pipeline(name="FraudDetectionPipeline")
+execution = pipeline.start()
+execution.wait()
+```
+
+**AWS CLI**:
+
+```bash
+aws sagemaker start-pipeline-execution \
+  --pipeline-name FraudDetectionPipeline \
+  --pipeline-parameters Name=ProcessingInstanceType,Value=ml.g4dn.2xlarge
+```
+
+Each execution runs through preprocessing, training, and model registration. SageMaker automatically provisions GPU instances, runs the containers, stores artifacts in S3, and cleans up resources when complete. Step caching ensures that unchanged steps don't re-run on subsequent executions.
 
 ## Understanding the Workflow
 
-![Notebook Environment](docs/img/deployKFNotebook-dashboard.png)
-
-The `workflows/` directory contains the pipeline definition and components:
+The `workflows/` directory contains the SageMaker pipeline definition:
 
 ```
 workflows/
 ├── src/workflows/
-│   ├── cudf_e2e_pipeline.py      # Pipeline definition
-│   └── components/
-│       └── preprocess_tabformer.py   # Preprocessing logic
-└── fraud_detection_cudf_pipeline.yaml  # Compiled output
+│   └── sagemaker_fraud_detection_pipeline.py  # Pipeline definition
+├── pyproject.toml                              # Dependencies
+└── uv.lock                                     # Lock file
 ```
 
-The pipeline uses PVC-based artifact passing. Rather than uploading intermediate files to S3 between steps, components mount a shared persistent volume. This matters because the preprocessed data is several gigabytes, and round-tripping through S3 adds significant latency.
+The pipeline uses S3 for artifact passing between steps. SageMaker automatically manages the data flow:
 
 ```
-┌──────────┐   ┌──────────────┐   ┌────────┐   ┌────────────────┐
-│ Download │ → │ cuDF Preproc │ → │ Config │ → │ GNN+XGB Train  │
-│ from S3  │   │ (GPU)        │   │ Writer │   │ (GPU)          │
-└──────────┘   └──────────────┘   └────────┘   └────────────────┘
-      │                │                │               │
-      └────────────────┴────────────────┴───────────────┘
-                              │
-                    ┌─────────────────┐
-                    │  Shared PVC     │
-                    │  (100Gi gp3)    │
-                    └─────────────────┘
-                              │
-                      ┌───────────────┐
-                      │ Upload to S3  │
-                      └───────────────┘
-                              │
-                              ▼
-   s3://ml-on-containers-<account>-model-registry/model-repository/
-                              │
-                              ▼
-                    ┌───────────────┐
-                    │ Triton Server │
-                    │ (auto-loads)  │
-                    └───────────────┘
+┌──────────────────────┐
+│  Raw Data (S3)       │
+│  TabFormer Dataset   │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Preprocessing       │
+│  (Processing Job)    │
+│  - RAPIDS/cuDF       │
+│  - ml.g4dn.2xlarge   │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Processed Data (S3) │
+│  - GNN graph         │
+│  - XGB features      │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Training            │
+│  (Training Job)      │
+│  - GNN + XGBoost     │
+│  - ml.g4dn.2xlarge   │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Model Artifacts     │
+│  (S3)                │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Model Registry      │
+│  (SageMaker)         │
+│  - Versioning        │
+│  - Approval workflow │
+└──────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Triton Endpoint     │
+│  (SageMaker)         │
+│  - Real-time infer   │
+│  - Auto-scaling      │
+└──────────────────────┘
 ```
 
-The training container outputs a Triton model repository structure. The upload component pushes this to `s3://ml-on-containers-<account>-model-registry/model-repository/`. Triton's `--model-repository` flag points to this S3 path, and it periodically checks for new models.
-
-The model itself is called `prediction_and_shapley`. It takes merchant features, user features, and graph edge information as inputs. It returns fraud probability plus Shapley values that explain which features contributed most to the prediction. This explainability matters for regulatory compliance and fraud analyst workflows.
+The trained model can be deployed to a SageMaker endpoint running NVIDIA Triton. The model accepts merchant features, cardholder features, and graph structure as inputs. It returns fraud probability plus Shapley values for explainability, which is critical for regulatory compliance and fraud analyst workflows.
 
 ## What's Next
 
@@ -152,7 +172,25 @@ The default hyperparameters work reasonably well, but you can tune them through 
 - `xgb_num_boost_round`: XGBoost boosting rounds, higher values risk overfitting
 - `gnn_hidden_channels`: Width of the GNN layers, larger captures more patterns
 
-To use your own data, replace the S3 source path and ensure your CSV has the expected columns. The preprocessing script expects TabFormer's schema, so you may need to modify `workflows/src/workflows/components/preprocess_tabformer.py` for different datasets.
+Adjust these when starting a pipeline execution:
+
+```python
+execution = pipeline.start(
+    parameters={
+        "GnnNumEpochs": 12,
+        "XgbNumBoostRound": 768,
+        "ProcessingInstanceType": "ml.g5.2xlarge"
+    }
+)
+```
+
+To use your own data, replace the `InputDataUrl` parameter with your S3 path. Ensure your CSV matches TabFormer's schema, or modify the preprocessing container to handle different data formats.
+
+For production deployments, consider:
+- Setting up SageMaker Model Monitor for drift detection
+- Configuring SageMaker Pipelines schedules for automated retraining
+- Using SageMaker Projects for MLOps templates with CI/CD
+- Enabling VPC mode for SageMaker jobs if network isolation is required
 
 ## Cleanup
 
@@ -161,7 +199,7 @@ cd infra
 npx cdk destroy --all
 ```
 
-This removes the EKS cluster, node groups, and associated resources. S3 buckets with data may need manual deletion if they're not empty.
+This removes the SageMaker Domain, IAM roles, ECR repositories, and S3 buckets. Note that S3 buckets are configured with auto-delete, but you may need to manually delete SageMaker endpoints, model packages, and pipeline executions before destroying the stack.
 
 ## Contributing
 

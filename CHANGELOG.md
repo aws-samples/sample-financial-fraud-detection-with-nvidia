@@ -2,7 +2,54 @@
 
 All notable changes to the NVIDIA Financial Fraud Detection Blueprint are documented here.
 
-## [2.0.0] - January 2025 (Latest)
+## [3.0.0] - January 2025 (Latest)
+
+Simplified architecture migrating back to SageMaker Pipelines for fully managed, serverless ML orchestration.
+
+### Major Changes
+
+- **SageMaker Pipelines**: Native SageMaker pipeline orchestration replaces Kubeflow/EKS for simpler operations
+- **Serverless Architecture**: Eliminated EKS cluster management, Karpenter, and Kubernetes overhead
+- **Managed Infrastructure**: SageMaker handles job scheduling, resource provisioning, and cleanup automatically
+- **GPU Processing & Training**: Custom RAPIDS and training containers run on SageMaker Processing/Training Jobs
+- **Model Registry Integration**: Built-in model versioning and approval workflows via SageMaker Model Registry
+- **Simplified Deployment**: ~15 minute infrastructure setup vs 30+ minutes for EKS-based approach
+
+### Infrastructure Changes
+
+- Removed EKS cluster and all Kubernetes components (Karpenter, ArgoCD, Kubeflow, deployKF)
+- Removed VPC infrastructure (SageMaker jobs run in AWS-managed VPCs by default)
+- Added `SageMakerInfraStack` for IAM roles and permissions
+- Added `SageMakerDomainStack` for Studio access
+- Added `SageMakerTritonEndpointStack` for inference deployment
+- Simplified to 3 ECR repositories: preprocessing, training, and Triton inference
+- Bucket naming updated with `-sm` suffix to distinguish from Kubeflow deployment
+
+### Pipeline Changes
+
+- Consolidated to 3 steps: Preprocessing → Training → Model Registration
+- Direct S3 artifact passing managed by SageMaker
+- Step caching prevents re-running unchanged pipeline stages
+- Pipeline parameters for hyperparameter tuning and instance type selection
+- Python SDK deployment via `sagemaker_fraud_detection_pipeline.py`
+
+### Removed
+
+- EKS cluster, Karpenter, GPU Operator, ALB Controller
+- Kubeflow Pipelines, deployKF, ArgoCD
+- Kubernetes-specific configurations (PVCs, IRSA, node selectors)
+- Kubeflow notebook servers (replaced by SageMaker Studio)
+- Custom download and upload components (SageMaker handles data movement)
+
+### Benefits
+
+- **Lower operational overhead**: No cluster management or Kubernetes expertise required
+- **Cost optimization**: Pay only for job execution time, no idle cluster resources
+- **Faster deployment**: Infrastructure deploys in ~15 minutes vs 30+ minutes
+- **Native AWS integration**: Seamless integration with IAM, CloudWatch, and AWS console
+- **Enterprise ready**: Built-in security, compliance, and governance features
+
+## [2.0.0] - January 2025
 
 Complete migration from SageMaker to Kubeflow Pipelines on EKS.
 
