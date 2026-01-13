@@ -36,33 +36,38 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
             bucketName: props.dataBucketName,
             removalPolicy: cdk.RemovalPolicy.DESTROY,
             autoDeleteObjects: true,
-            serverAccessLogsPrefix: "access-logs/",
             enforceSSL: true,
             encryption: s3.BucketEncryption.S3_MANAGED,
         });
 
         // Model Bucket
-        this.modelBucket = new s3.Bucket(this, "ModelBucket", {
-            bucketName: props.modelBucketName,
-            removalPolicy: cdk.RemovalPolicy.DESTROY,
-            autoDeleteObjects: true,
-            serverAccessLogsPrefix: "access-logs/",
-            enforceSSL: true,
-            encryption: s3.BucketEncryption.S3_MANAGED,
-        });
+        // If names are same, reuse the data bucket
+        if (props.modelBucketName === props.dataBucketName) {
+            this.modelBucket = this.dataBucket;
+        } else {
+            this.modelBucket = new s3.Bucket(this, "ModelBucket", {
+                bucketName: props.modelBucketName,
+                removalPolicy: cdk.RemovalPolicy.DESTROY,
+                autoDeleteObjects: true,
+                enforceSSL: true,
+                encryption: s3.BucketEncryption.S3_MANAGED,
+            });
+        }
 
         // Model Registry Bucket (if different, otherwise we can reuse modelBucket)
-        if (props.modelRegistryBucketName !== props.modelBucketName) {
+        if (props.modelRegistryBucketName !== props.modelBucketName && props.modelRegistryBucketName !== props.dataBucketName) {
             this.modelRegistryBucket = new s3.Bucket(this, "ModelRegistryBucket", {
                 bucketName: props.modelRegistryBucketName,
                 removalPolicy: cdk.RemovalPolicy.DESTROY,
                 autoDeleteObjects: true,
-                serverAccessLogsPrefix: "access-logs/",
                 enforceSSL: true,
                 encryption: s3.BucketEncryption.S3_MANAGED,
             });
         } else {
-            this.modelRegistryBucket = this.modelBucket;
+            // Reuse whichever bucket matches
+            this.modelRegistryBucket = (props.modelRegistryBucketName === props.modelBucketName)
+                ? this.modelBucket
+                : this.dataBucket;
         }
 
         // Outputs

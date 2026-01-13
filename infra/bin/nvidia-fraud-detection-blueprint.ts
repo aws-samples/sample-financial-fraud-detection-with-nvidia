@@ -5,6 +5,7 @@ import { SageMakerPreprocessingImageRepoStack } from "../lib/sagemaker-preproces
 import { TritonImageRepoStack } from "../lib/triton-image-repo";
 import { SageMakerInfraStack } from "../lib/sagemaker-infrastructure-stack";
 import { SageMakerTritonEndpointStack } from "../lib/sagemaker-triton-endpoint-stack";
+import { SageMakerDomainStack } from "../lib/sagemaker-domain-stack";
 
 const app = new cdk.App();
 
@@ -15,7 +16,8 @@ const env = {
 
 // Config
 const ngcSecretName = app.node.tryGetContext("ngcSecretName") || "ngc-api-key";
-const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
+// Use sm suffix (sm = sagemaker) to distinguish from old kubeflow buckets
+const modelBucketName = "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
 const dataBucketName = modelBucketName;
 const modelRegistryBucketName = modelBucketName + "-model-registry";
 
@@ -75,7 +77,19 @@ const smInfra = new SageMakerInfraStack(
 );
 smInfra.addDependency(baseInfra);
 
-// 5. Triton Endpoint (SageMaker)
+// 5. SageMaker Domain (for Studio access to Pipelines)
+const domainStack = new SageMakerDomainStack(
+  app,
+  "SageMakerDomainStack",
+  {
+    env: env,
+    domainName: "fraud-detection-domain",
+    executionRoleArn: smInfra.sagemakerExecutionRoleArn,
+  }
+);
+domainStack.addDependency(smInfra);
+
+// 6. Triton Endpoint (SageMaker)
 // Note: This requires a model.tar.gz to exist in the model bucket at the specified path.
 // This stack is typically deployed AFTER the training pipeline has run at least once.
 const endpointStack = new SageMakerTritonEndpointStack(
