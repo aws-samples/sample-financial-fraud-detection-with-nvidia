@@ -12,6 +12,7 @@ export interface KfAddonProps {
   dataBucketName: string;
   modelBucketName: string;
   hostname: string;
+  email: string;
 }
 
 export class KfAddon implements ClusterAddOn {
@@ -37,15 +38,46 @@ export class KfAddon implements ClusterAddOn {
     const kfRole = new iam.Role(clusterInfo.cluster, 'kf-role', { assumedBy: principal });
     kfRole.addManagedPolicy(kfPolicy);
 
-    const argoCrdCehck = new KubernetesObjectValue(clusterInfo.cluster, 'ArgoCRDCheck', {
+    const route53PolicyDoc = new iam.PolicyDocument({
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['route53:GetChange'],
+          resources: ['arn:aws:route53:::change/*']
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['route53:ChangeResourceRecordSets', 'route53:ListResourceRecordSets'],
+          resources: ['arn:aws:route53:::hostedzone/*'],
+          conditions: {
+            'ForAllValues:StringEquals': {
+              'route53:ChangeResourceRecordSetsRecordTypes': ['TXT']
+            }
+          }
+        }),
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['route53:ListHostedZonesByName'],
+          resources: ['*']
+        })
+      ]
+    });
+
+
+    const route53Role = new iam.Role(clusterInfo.cluster, 'route53-role', {
+      assumedBy: principal,
+      inlinePolicies: { route53Policy: route53PolicyDoc }
+    });
+
+    const argoCrdCheck = new KubernetesObjectValue(clusterInfo.cluster, 'ArgoCRDCheck', {
       cluster: clusterInfo.cluster,
       objectType: 'crd',
       objectName: 'applications.argoproj.io',
       jsonPath: '.status.conditions[?(@.type=="Established")].status'
     });
 
-    const deployKfManifest = clusterInfo.cluster.addManifest("deployKF-argo-app", deployKfApp(this.props.bucketName, clusterInfo.cluster.stack.region, kfRole.roleArn, this.props.hostname))
-    deployKfManifest.node.addDependency(argoCrdCehck)
+    const deployKfManifest = clusterInfo.cluster.addManifest("deployKF-argo-app", deployKfApp(this.props.bucketName, clusterInfo.cluster.stack.region, kfRole.roleArn, route53Role.roleArn, this.props.hostname, this.props.email))
+    deployKfManifest.node.addDependency(argoCrdCheck)
     return Promise.resolve(deployKfManifest)
   }
 

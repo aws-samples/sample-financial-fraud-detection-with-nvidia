@@ -1,8 +1,10 @@
 export const deployKfApp = (
   bucket: string,
   region: string,
-  roleArn: string,
+  kfRoleArn: string,
+  certRoleArn: string,
   hostname: string,
+  email: string,
 ) => {
   return {
     apiVersion: "argoproj.io/v1alpha1",
@@ -70,6 +72,35 @@ deploykf_dependencies:
     images:
       kubectl:
         repository: docker.io/bitnamilegacy/kubectl
+    controller:
+      serviceAccount:
+        annotations:
+          eks.amazonaws.com/role-arn: ${certRoleArn}
+    extraManifests:
+      - |
+        apiVersion: cert-manager.io/v1
+        kind: ClusterIssuer
+        metadata:
+          name: letsencrypt-staging
+        spec:
+          acme:
+            server: https://acme-staging-v02.api.letsencrypt.org/directory
+            email: ${email}
+            profile: tlsserver
+            privateKeySecretRef:
+              name: letsencrypt-staging
+            solvers:
+            - dns01:
+                route53:
+                  region: ${region}
+                  role: ${certRoleArn}
+                  auth:
+                    kubernetes:
+                      serviceAccountRef:
+                        name: cert-manager
+    clusterIssuer:
+      enabled: false
+      name: letsencrypt-staging
 
   ## --------------------------------------
   ##                 istio
@@ -123,7 +154,7 @@ deploykf_core:
       plugins:
         - kind: AwsIamForServiceAccount
           spec:
-            awsIamRole: ${roleArn}
+            awsIamRole: ${kfRoleArn}
 
 ## --------------------------------------------------------------------------------
 ##                                   deploykf-opt
@@ -168,10 +199,10 @@ kubeflow_tools:
     serviceAccounts:
       apiServer:
         annotations:
-          eks.amazonaws.com/role-arn: ${roleArn}
+          eks.amazonaws.com/role-arn: ${kfRoleArn}
       frontend:
         annotations:
-          eks.amazonaws.com/role-arn: ${roleArn}
+          eks.amazonaws.com/role-arn: ${kfRoleArn}
 
     bucket:
       name: ${bucket}
@@ -188,11 +219,11 @@ kubeflow_dependencies:
     controller:
       serviceAccount:
         annotations:
-          eks.amazonaws.com/role-arn: ${roleArn}
+          eks.amazonaws.com/role-arn: ${kfRoleArn}
     server:
       serviceAccount:
         annotations:
-          eks.amazonaws.com/role-arn: ${roleArn}`,
+          eks.amazonaws.com/role-arn: ${kfRoleArn}`,
             },
           ],
         },
