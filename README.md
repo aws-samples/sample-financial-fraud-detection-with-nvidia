@@ -25,11 +25,6 @@ When you trigger a pipeline run, three stages execute:
 **AWS Account Requirements:**
 - Permissions for SageMaker, ECR, S3, IAM, CloudFormation, CodeBuild, Secrets Manager
 - AWS CLI configured with appropriate profile
-- **Service Quota Increases Required:**
-  - `ml.g4dn.4xlarge for processing job usage`: Request at least 1 instance
-  - `ml.g4dn.2xlarge for training job usage`: Request at least 1 instance
-  - Go to AWS Console → Service Quotas → Amazon SageMaker to request increases
-  - Approval typically takes 1-2 business days
 
 **Local Requirements:**
 - Docker (for building containers)
@@ -261,11 +256,6 @@ The trained model can be deployed to a SageMaker endpoint running NVIDIA Triton.
 
 ## Troubleshooting
 
-### Pipeline Execution Fails with "Service Limit" Error
-
-**Error:** `The account-level service limit 'ml.g4dn.2xlarge for processing job usage' is 0 Instances`
-
-**Solution:** You need to request service quota increases (see Prerequisites). This is required before running the pipeline.
 
 ### CodeBuild Fails to Pull NGC Images
 
