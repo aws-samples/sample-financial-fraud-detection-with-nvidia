@@ -61,7 +61,7 @@ export CDK_DEFAULT_ACCOUNT=<your-account>
 export CDK_DEFAULT_REGION=<your-region>
 
 # Deploy all stacks
-npx cdk deploy --all --profile <your-aws-profile> --require-approval never
+npx cdk deploy SageMakerTrainingImageRepoStack SageMakerPreprocessingImageRepoStack TritonImageRepoStack NvidiaFraudDetectionBlueprint SageMakerInfraStack SageMakerDomainStack --profile <your-aws-profile> --require-approval never
 ```
 
 This creates:
