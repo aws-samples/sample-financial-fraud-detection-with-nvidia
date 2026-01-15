@@ -17,7 +17,8 @@ const env = {
 // Config
 const ngcSecretName = app.node.tryGetContext("ngcSecretName") || "ngc-api-key";
 // Use sm suffix (sm = sagemaker) to distinguish from old kubeflow buckets
-const modelBucketName = "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
+const modelBucketName =
+  "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
 const dataBucketName = modelBucketName;
 const modelRegistryBucketName = modelBucketName + "-model-registry";
 
@@ -27,8 +28,9 @@ const trainingImageRepo = new SageMakerTrainingImageRepoStack(
   "SageMakerTrainingImageRepoStack",
   {
     env: env,
-    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker"
+    repoUrl:
+      "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
+    branch: "v2_sagemaker",
   },
 );
 
@@ -37,21 +39,19 @@ const preprocessingImageRepo = new SageMakerPreprocessingImageRepoStack(
   "SageMakerPreprocessingImageRepoStack",
   {
     env: env,
-    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker"
+    repoUrl:
+      "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
+    branch: "v2_sagemaker",
   },
 );
 
 // 2. Inference Image Repo (Triton)
-const tritonImageRepo = new TritonImageRepoStack(
-  app,
-  "TritonImageRepoStack",
-  {
-    env: env,
-    repoUrl: "https://github.com/atroyanovsky/TW-sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker"
-  },
-);
+const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
+  env: env,
+  repoUrl:
+    "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
+  branch: "v2_sagemaker",
+});
 
 // 3. Base Infrastructure (VPC, S3)
 const baseInfra = new NvidiaFraudDetectionBlueprint(
@@ -66,27 +66,19 @@ const baseInfra = new NvidiaFraudDetectionBlueprint(
 );
 
 // 4. SageMaker IAM Roles & Infrastructure
-const smInfra = new SageMakerInfraStack(
-  app,
-  "SageMakerInfraStack",
-  {
-    env: env,
-    dataBucketName: dataBucketName,
-    modelBucketName: modelBucketName,
-  }
-);
+const smInfra = new SageMakerInfraStack(app, "SageMakerInfraStack", {
+  env: env,
+  dataBucketName: dataBucketName,
+  modelBucketName: modelBucketName,
+});
 smInfra.addDependency(baseInfra);
 
 // 5. SageMaker Domain (for Studio access to Pipelines)
-const domainStack = new SageMakerDomainStack(
-  app,
-  "SageMakerDomainStack",
-  {
-    env: env,
-    domainName: "fraud-detection-domain",
-    executionRoleArn: smInfra.sagemakerExecutionRoleArn,
-  }
-);
+const domainStack = new SageMakerDomainStack(app, "SageMakerDomainStack", {
+  env: env,
+  domainName: "fraud-detection-domain",
+  executionRoleArn: smInfra.sagemakerExecutionRoleArn,
+});
 domainStack.addDependency(smInfra);
 
 // 6. Triton Endpoint (SageMaker)
@@ -100,7 +92,7 @@ const endpointStack = new SageMakerTritonEndpointStack(
     tritonImageUri: `${tritonImageRepo.repositoryUri}:latest`,
     modelDataUrl: `s3://${modelBucketName}/model-repository/model.tar.gz`,
     executionRoleArn: smInfra.sagemakerExecutionRoleArn,
-  }
+  },
 );
 endpointStack.addDependency(smInfra);
 endpointStack.addDependency(tritonImageRepo);
