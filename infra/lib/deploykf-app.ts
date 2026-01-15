@@ -5,6 +5,7 @@ export const deployKfApp = (
   certRoleArn: string,
   hostname: string,
   email: string,
+  saName: string
 ) => {
   return {
     apiVersion: "argoproj.io/v1alpha1",
@@ -69,26 +70,51 @@ deploykf_dependencies:
   ##             cert-manager
   ## --------------------------------------
   cert_manager:
+    charts:
+      certManager:
+        version: 1.18.4
     images:
       kubectl:
         repository: docker.io/bitnamilegacy/kubectl
-    controller:
-      serviceAccount:
-        annotations:
-          eks.amazonaws.com/role-arn: ${certRoleArn}
+      certManagerCtl:
+        repository: quay.io/jetstack/cert-manager-startupapicheck
     extraManifests:
+      - |
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: Role
+        metadata:
+          name: cert-manager-token-creator
+          namespace: cert-manager
+        rules:
+        - apiGroups: [""]
+          resources: ["serviceaccounts/token"]
+          verbs: ["create"]
+      - |
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: RoleBinding
+        metadata:
+          name: cert-manager-token-creator
+          namespace: cert-manager
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: Role
+          name: cert-manager-token-creator
+        subjects:
+        - kind: ServiceAccount
+          name: cert-manager
+          namespace: cert-manager
       - |
         apiVersion: cert-manager.io/v1
         kind: ClusterIssuer
         metadata:
-          name: letsencrypt-staging
+          name: letsencrypt-prod
         spec:
           acme:
-            server: https://acme-staging-v02.api.letsencrypt.org/directory
+            server: https://acme-v02.api.letsencrypt.org/directory
             email: ${email}
             profile: tlsserver
             privateKeySecretRef:
-              name: letsencrypt-staging
+              name: letsencrypt-prod
             solvers:
             - dns01:
                 route53:
@@ -97,10 +123,10 @@ deploykf_dependencies:
                   auth:
                     kubernetes:
                       serviceAccountRef:
-                        name: cert-manager
+                        name: ${saName}
     clusterIssuer:
       enabled: false
-      name: letsencrypt-staging
+      issuerName: letsencrypt-prod
 
   ## --------------------------------------
   ##                 istio

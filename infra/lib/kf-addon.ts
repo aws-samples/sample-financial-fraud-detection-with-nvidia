@@ -1,5 +1,5 @@
 import { ArgoCDAddOn, ClusterAddOn, ClusterInfo } from "@aws-quickstart/eks-blueprints";
-import { dependable } from "@aws-quickstart/eks-blueprints/dist/utils";
+import { createServiceAccount, dependable } from "@aws-quickstart/eks-blueprints/dist/utils";
 import { Construct } from "constructs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { CfnJson } from "aws-cdk-lib";
@@ -64,10 +64,7 @@ export class KfAddon implements ClusterAddOn {
     });
 
 
-    const route53Role = new iam.Role(clusterInfo.cluster, 'route53-role', {
-      assumedBy: principal,
-      inlinePolicies: { route53Policy: route53PolicyDoc }
-    });
+    const certManagerSA = createServiceAccount(clusterInfo.cluster, "cert-manager-acme-sa", "cert-manager", route53PolicyDoc)
 
     const argoCrdCheck = new KubernetesObjectValue(clusterInfo.cluster, 'ArgoCRDCheck', {
       cluster: clusterInfo.cluster,
@@ -76,7 +73,7 @@ export class KfAddon implements ClusterAddOn {
       jsonPath: '.status.conditions[?(@.type=="Established")].status'
     });
 
-    const deployKfManifest = clusterInfo.cluster.addManifest("deployKF-argo-app", deployKfApp(this.props.bucketName, clusterInfo.cluster.stack.region, kfRole.roleArn, route53Role.roleArn, this.props.hostname, this.props.email))
+    const deployKfManifest = clusterInfo.cluster.addManifest("deployKF-argo-app", deployKfApp(this.props.bucketName, clusterInfo.cluster.stack.region, kfRole.roleArn, certManagerSA.role.roleArn, this.props.hostname, this.props.email, certManagerSA.serviceAccountName))
     deployKfManifest.node.addDependency(argoCrdCheck)
     return Promise.resolve(deployKfManifest)
   }
