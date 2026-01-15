@@ -22,7 +22,15 @@ When you trigger a pipeline run, five things happen in sequence.
 
 **Serve** happens automatically. Triton polls the S3 model repository and loads new model versions as they appear. Within minutes of training completion, the new model serves inference requests.
 
-## Getting Started
+## Prerequisites
+
+Before deploying, you need a few AWS resources in place.
+
+**Route53 Hosted Zone**: The deployment creates DNS records for the Kubeflow dashboard. You need an existing hosted zone in Route53 for your domain. If you're using a subdomain, the hosted zone should be for that subdomain (e.g., `kf.example.com` not just `example.com`). You will need to setup appropriate delegation depending on your organizations/accounts environment and requirements.
+
+**NGC API Key** (optional): If you want to pull NVIDIA containers from NGC, store your API key in AWS Secrets Manager. The secret name gets passed to the CDK stack.
+
+## Deployment
 
 You'll need an AWS account with permissions for EKS, EC2, ECR, and S3. Locally you'll need Docker, Node.js 20+, AWS CLI, and kubectl. The full deployment takes about 30 minutes.
 
