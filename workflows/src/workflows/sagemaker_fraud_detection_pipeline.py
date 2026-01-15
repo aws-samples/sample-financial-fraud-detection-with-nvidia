@@ -1,31 +1,38 @@
 import os
+
 import boto3
-from sagemaker.train import ModelTrainer
-from sagemaker.train.configs import InputData, Compute
+from sagemaker.core.helper.session_helper import Session
 from sagemaker.core.processing import Processor
 from sagemaker.core.shapes import (
     ProcessingInput,
-    ProcessingS3Input,
     ProcessingOutput,
-    ProcessingS3Output
+    ProcessingS3Input,
+    ProcessingS3Output,
 )
-from sagemaker.serve.model_builder import ModelBuilder
 from sagemaker.core.workflow.parameters import (
+    ParameterFloat,
     ParameterInteger,
     ParameterString,
-    ParameterFloat,
 )
-from sagemaker.mlops.workflow.pipeline import Pipeline
-from sagemaker.mlops.workflow.steps import ProcessingStep, TrainingStep, CacheConfig
-from sagemaker.mlops.workflow.model_step import ModelStep
 from sagemaker.core.workflow.pipeline_context import PipelineSession
-from sagemaker.core.helper.session_helper import Session
+from sagemaker.mlops.workflow.model_step import ModelStep
+from sagemaker.mlops.workflow.pipeline import Pipeline
+from sagemaker.mlops.workflow.steps import CacheConfig, ProcessingStep, TrainingStep
+from sagemaker.serve.model_builder import ModelBuilder
+from sagemaker.train import ModelTrainer
+from sagemaker.train.configs import Compute, InputData
+
 
 def get_session(region, default_bucket, profile_name=None):
-    boto_session = boto3.Session(region_name=region, profile_name=profile_name) if profile_name else boto3.Session(region_name=region)
+    boto_session = (
+        boto3.Session(region_name=region, profile_name=profile_name)
+        if profile_name
+        else boto3.Session(region_name=region)
+    )
     sagemaker_session = Session(boto_session=boto_session)
     pipeline_session = PipelineSession(boto_session=boto_session)
     return sagemaker_session, pipeline_session
+
 
 def get_pipeline(
     region,
@@ -36,24 +43,34 @@ def get_pipeline(
     base_job_prefix="fraud-detect",
     profile_name=None,
 ):
-    sagemaker_session, pipeline_session = get_session(region, default_bucket, profile_name)
+    sagemaker_session, pipeline_session = get_session(
+        region, default_bucket, profile_name
+    )
     account_id = sagemaker_session.account_id()
-    
+
     # Cache config for pipeline steps
-    cache_config = CacheConfig(enable_caching=True, expire_after="30d")
+    cache_config = CacheConfig(enable_caching=False, expire_after="30d")
 
     # ========================================================================
     # Parameters
     # ========================================================================
-    processing_instance_count = ParameterInteger(name="ProcessingInstanceCount", default_value=1)
-    processing_instance_type = ParameterString(name="ProcessingInstanceType", default_value="ml.g4dn.2xlarge")
-    training_instance_count = ParameterInteger(name="TrainingInstanceCount", default_value=1)
-    training_instance_type = ParameterString(name="TrainingInstanceType", default_value="ml.g4dn.2xlarge")
-    
+    processing_instance_count = ParameterInteger(
+        name="ProcessingInstanceCount", default_value=1
+    )
+    processing_instance_type = ParameterString(
+        name="ProcessingInstanceType", default_value="ml.g4dn.2xlarge"
+    )
+    training_instance_count = ParameterInteger(
+        name="TrainingInstanceCount", default_value=1
+    )
+    training_instance_type = ParameterString(
+        name="TrainingInstanceType", default_value="ml.g4dn.2xlarge"
+    )
+
     # S3 paths
     input_data_url = ParameterString(
         name="InputDataUrl",
-        default_value=f"s3://{default_bucket}/data/TabFormer/raw/card_transaction.v1.csv"
+        default_value=f"s3://{default_bucket}/data/TabFormer/raw/card_transaction.v1.csv",
     )
 
     # GNN Hyperparameters
@@ -76,8 +93,10 @@ def get_pipeline(
     # Step 1: Preprocessing (RAPIDS)
     # ========================================================================
     # Image URI for the custom RAPIDS container
-    processing_image_uri = f"{account_id}.dkr.ecr.{region}.amazonaws.com/rapids-preprocessing:latest"
-    
+    processing_image_uri = (
+        f"{account_id}.dkr.ecr.{region}.amazonaws.com/rapids-preprocessing:latest"
+    )
+
     processor = Processor(
         image_uri=processing_image_uri,
         instance_type="ml.g4dn.2xlarge",
@@ -86,7 +105,7 @@ def get_pipeline(
         sagemaker_session=pipeline_session,
         role=role_arn,
     )
-    
+
     # Note: The preprocessing container has the script built-in as entrypoint
     processor_args = processor.run(
         inputs=[
@@ -98,7 +117,7 @@ def get_pipeline(
                     s3_data_type="S3Prefix",
                     s3_input_mode="File",
                     s3_data_distribution_type="ShardedByS3Key",
-                )
+                ),
             )
         ],
         outputs=[
@@ -107,20 +126,20 @@ def get_pipeline(
                 s3_output=ProcessingS3Output(
                     s3_uri=f"s3://{default_bucket}/data/processed/xgb",
                     local_path="/opt/ml/processing/output/xgb",
-                    s3_upload_mode="EndOfJob"
-                )
+                    s3_upload_mode="EndOfJob",
+                ),
             ),
             ProcessingOutput(
                 output_name="gnn",
                 s3_output=ProcessingS3Output(
                     s3_uri=f"s3://{default_bucket}/data/processed/gnn",
                     local_path="/opt/ml/processing/output/gnn",
-                    s3_upload_mode="EndOfJob"
-                )
+                    s3_upload_mode="EndOfJob",
+                ),
             ),
         ],
     )
-    
+
     step_process = ProcessingStep(
         name="PreprocessData",
         step_args=processor_args,
@@ -131,7 +150,7 @@ def get_pipeline(
     # Step 2: Training (GNN+XGBoost)
     # ========================================================================
     training_image_uri = f"{account_id}.dkr.ecr.{region}.amazonaws.com/nvidia-training-repo-sagemaker:latest"
-    
+
     model_trainer = ModelTrainer(
         training_image=training_image_uri,
         compute=Compute(
@@ -158,19 +177,23 @@ def get_pipeline(
         input_data_config=[
             InputData(
                 channel_name="gnn",
-                data_source=step_process.properties.ProcessingOutputConfig.Outputs["gnn"].S3Output.S3Uri,
-                content_type="text/csv"
+                data_source=step_process.properties.ProcessingOutputConfig.Outputs[
+                    "gnn"
+                ].S3Output.S3Uri,
+                content_type="text/csv",
             ),
             InputData(
                 channel_name="xgb",
-                data_source=step_process.properties.ProcessingOutputConfig.Outputs["xgb"].S3Output.S3Uri,
-                content_type="text/csv"
+                data_source=step_process.properties.ProcessingOutputConfig.Outputs[
+                    "xgb"
+                ].S3Output.S3Uri,
+                content_type="text/csv",
             ),
         ],
     )
-    
+
     train_args = model_trainer.train()
-    
+
     step_train = TrainingStep(
         name="TrainModel",
         step_args=train_args,
@@ -180,15 +203,17 @@ def get_pipeline(
     # ========================================================================
     # Step 3: Register Model
     # ========================================================================
-    triton_image_uri = f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
-    
+    triton_image_uri = (
+        f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
+    )
+
     model_builder = ModelBuilder(
         s3_model_data_url=step_train.properties.ModelArtifacts.S3ModelArtifacts,
         image_uri=triton_image_uri,
         sagemaker_session=pipeline_session,
         role_arn=role_arn,
     )
-    
+
     step_register = ModelStep(
         name="RegisterModel",
         step_args=model_builder.register(
@@ -197,7 +222,7 @@ def get_pipeline(
             response_types=["application/json"],
             inference_instances=["ml.g4dn.2xlarge"],
             approval_status="PendingManualApproval",
-        )
+        ),
     )
 
     # ========================================================================
@@ -229,15 +254,21 @@ def get_pipeline(
     )
     return pipeline
 
+
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--role-arn", required=True, help="SageMaker Execution Role ARN")
+    parser.add_argument(
+        "--role-arn", required=True, help="SageMaker Execution Role ARN"
+    )
     parser.add_argument("--default-bucket", required=True, help="Default S3 bucket")
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--profile", default=None, help="AWS profile name")
     args = parser.parse_args()
-    
-    pipeline = get_pipeline(args.region, args.role_arn, args.default_bucket, profile_name=args.profile)
+
+    pipeline = get_pipeline(
+        args.region, args.role_arn, args.default_bucket, profile_name=args.profile
+    )
     pipeline.upsert(role_arn=args.role_arn)
     print(f"Pipeline {pipeline.name} created/updated.")

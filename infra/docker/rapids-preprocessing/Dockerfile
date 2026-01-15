@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir \
 
 # Copy preprocessing scripts
 # Assumes build context is the repository root
-COPY src/preprocess_TabFormer_sagemaker.py /opt/ml/code/preprocess.py
-COPY src/preprocess_TabFormer_lp.py /opt/ml/code/preprocess_TabFormer_lp.py
+COPY src/preprocess_TabFormer_sagemaker.py preprocess.py
+COPY src/preprocess_TabFormer_lp.py preprocess_TabFormer_lp.py
 
 # Set the entrypoint to the wrapper script
-ENV SAGEMAKER_PROGRAM preprocess.py
+ENTRYPOINT [ "python", "preprocess.py"]
