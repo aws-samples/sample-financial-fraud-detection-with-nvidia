@@ -1,7 +1,7 @@
 FROM nvcr.io/nvidia/rapidsai/base:25.12-cuda13-py3.12
 
 # Install SageMaker toolkit and dependencies required by preprocess_TabFormer_lp.py
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     build-essential
