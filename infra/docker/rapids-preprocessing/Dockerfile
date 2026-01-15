@@ -4,9 +4,7 @@ FROM nvcr.io/nvidia/rapidsai/base:25.12-cuda13-py3.12
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
+    build-essential
 RUN pip install --no-cache-dir \
     sagemaker-training \
     category_encoders \
