@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import { NvidiaFraudDetectionBlueprint } from "../lib/nvidia-fraud-detection-blueprint";
 import { BlueprintECRStack } from "../lib/training-image-repo";
 import { TritonImageRepoStack } from "../lib/triton-image-repo";
+import { BlueprintDomainStack } from "../lib/domain";
 
 const app = new cdk.App();
 
@@ -17,6 +18,11 @@ const modelBucketName = "ml-on-containers-" + process.env.CDK_DEFAULT_ACCOUNT;
 const kfBucketName = "kubeflow-pipelines-" + process.env.CDK_DEFAULT_ACCOUNT;
 const dataBucketName = modelBucketName;
 const modelRegistryBucketName = modelBucketName + "-model-registry";
+
+const hostedZoneStack = new BlueprintDomainStack(app, "NvidiaFraudDetectionHostedZone", {
+  env: env,
+  domain: hostname
+})
 
 const trainingImageRepo = new BlueprintECRStack(
   app,
@@ -47,5 +53,6 @@ const mainStack = new NvidiaFraudDetectionBlueprint(
   },
 );
 
+mainStack.addDependency(hostedZoneStack);
 mainStack.addDependency(trainingImageRepo);
 mainStack.addDependency(tritonImageRepo);
