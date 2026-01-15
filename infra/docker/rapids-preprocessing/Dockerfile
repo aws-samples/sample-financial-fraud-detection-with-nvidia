@@ -1,7 +1,7 @@
 FROM nvcr.io/nvidia/rapidsai/base:25.12-cuda13-py3.12
 
-# Install gcc/g++ via conda (since this is a conda-based image) and pip packages
-RUN conda install -y -c conda-forge gcc gxx make && \
+# Install gcc/g++ via conda with libmamba solver (much faster)
+RUN conda install -y -c gcc gxx make && \
     pip install --no-cache-dir \
     sagemaker-training \
     category_encoders \

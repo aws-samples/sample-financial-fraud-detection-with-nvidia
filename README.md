@@ -61,7 +61,14 @@ export CDK_DEFAULT_ACCOUNT=<your-account>
 export CDK_DEFAULT_REGION=<your-region>
 
 # Deploy all stacks
-npx cdk deploy SageMakerTrainingImageRepoStack SageMakerPreprocessingImageRepoStack TritonImageRepoStack NvidiaFraudDetectionBlueprint SageMakerInfraStack SageMakerDomainStack --profile <your-aws-profile> --require-approval never
+npx cdk deploy SageMakerTrainingImageRepoStack \
+ SageMakerPreprocessingImageRepoStack \
+ TritonImageRepoStack \
+ NvidiaFraudDetectionBlueprint \
+ SageMakerInfraStack \
+ SageMakerDomainStack \
+ --profile <your-aws-profile> \
+ --require-approval never
 ```
 
 This creates:
@@ -139,6 +146,10 @@ uv run python src/workflows/sagemaker_fraud_detection_pipeline.py \
   --default-bucket fraud-detection-<account>-sm \
   --region <your-region> \
   --profile <your-aws-profile>
+  
+npx cdk deploy SageMakerTritonEndpointStack \
+--profile <your-aws-profile> \
+--region <your-region>
 ```
 
 This registers the pipeline with SageMaker. You'll see: `Pipeline FraudDetectionPipeline created/updated.`
