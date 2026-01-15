@@ -35,7 +35,7 @@ def main():
     # We will use a temporary workspace or the output dir as the base path
     # and symlink the input data to where the function expects it.
 
-    base_path = "/opt/ml/processing/"
+    base_path = "/opt/ml/processing"
     raw_dir = os.path.join(base_path, "raw")
     os.makedirs(raw_dir, exist_ok=True)
 
