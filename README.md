@@ -20,21 +20,53 @@ When you trigger a pipeline run, three stages execute:
 
 ## Getting Started
 
-You'll need an AWS account with permissions for SageMaker, ECR, S3, and IAM. Locally you'll need Docker, Node.js 20+, and AWS CLI. The deployment takes about 15 minutes.
+### Prerequisites
+
+**AWS Account Requirements:**
+- Permissions for SageMaker, ECR, S3, IAM, CloudFormation, CodeBuild, Secrets Manager
+- AWS CLI configured with appropriate profile
+- **Service Quota Increases Required:**
+  - `ml.g4dn.4xlarge for processing job usage`: Request at least 1 instance
+  - `ml.g4dn.2xlarge for training job usage`: Request at least 1 instance
+  - Go to AWS Console → Service Quotas → Amazon SageMaker to request increases
+  - Approval typically takes 1-2 business days
+
+**Local Requirements:**
+- Docker (for building containers)
+- Node.js 20+ and npm
+- Python 3.12+
+- AWS CLI v2
+- `uv` (Python package manager): `pip install uv`
+
+**NVIDIA NGC API Key:**
+The infrastructure pulls base images from NVIDIA GPU Cloud. You need an NGC API key:
+
+1. Create account at https://ngc.nvidia.com/
+2. Generate API key: NGC → Setup → Generate API Key
+3. Store in AWS Secrets Manager:
+
+```bash
+aws secretsmanager create-secret \
+  --name nvidia-ngc-api-key \
+  --secret-string "<your-ngc-api-key>" \
+  --profile <your-aws-profile>
+```
+
+### Step 1: Deploy Infrastructure
 
 ```bash
 cd infra
 npm install
 
-# First time only
-npx cdk bootstrap aws://<ACCOUNT>/<REGION>
+# Bootstrap CDK (first time only)
+npx cdk bootstrap aws://<ACCOUNT>/<REGION> --profile <your-aws-profile>
 
 # Set your environment
 export CDK_DEFAULT_ACCOUNT=<your-account>
 export CDK_DEFAULT_REGION=<your-region>
 
-# Deploy the infrastructure
-npx cdk deploy --all
+# Deploy all stacks
+npx cdk deploy --all --profile <your-aws-profile> --require-approval never
 ```
 
 This creates:
@@ -44,18 +76,59 @@ This creates:
 - SageMaker Domain for Studio access
 - CodeBuild projects that automatically build container images
 
-The CDK deployment outputs the SageMaker execution role ARN and S3 bucket names. Save these for pipeline deployment.
+**Important:** Save the outputs from the deployment:
+- `SageMakerExecutionRoleArn`
+- `DataBucketName`
+- `DomainId`
 
-Once infrastructure deploys, upload your data to S3:
+### Step 2: Wait for Container Images to Build
+
+CodeBuild automatically starts building Docker images after deployment. Monitor progress:
 
 ```bash
-# Example: Upload TabFormer dataset
-aws s3 cp card_transaction.v1.csv s3://fraud-detection-<account>-sm/data/TabFormer/raw/
+# Check CodeBuild status
+aws codebuild list-builds-for-project \
+  --project-name sagemaker-training-image-copy \
+  --profile <your-aws-profile>
+
+# Verify images in ECR (wait until all 3 repos have images)
+aws ecr describe-images \
+  --repository-name rapids-preprocessing \
+  --profile <your-aws-profile>
+
+aws ecr describe-images \
+  --repository-name nvidia-training-repo-sagemaker \
+  --profile <your-aws-profile>
+
+aws ecr describe-images \
+  --repository-name triton-inference-server \
+  --profile <your-aws-profile>
 ```
 
-Access SageMaker Studio through the AWS Console at SageMaker → Domains → fraud-detection-domain → Studio. This gives you access to pipelines, experiments, model registry, and endpoints.
+Image builds take 10-20 minutes. **Do not proceed until all images are built.**
+
+### Step 3: Upload Training Data
+
+```bash
+# Download TabFormer dataset (or use your own data)
+# Upload to S3
+aws s3 cp card_transaction.v1.csv \
+  s3://fraud-detection-<account>-sm/data/TabFormer/raw/ \
+  --profile <your-aws-profile>
+```
+
+### Step 4: Access SageMaker Studio
+
+Open SageMaker Studio to view and execute pipelines:
+
+1. Go to AWS Console → SageMaker → Domains
+2. Click on `fraud-detection-domain`
+3. Click "Launch" → "Studio"
+4. Wait for Studio to load (first launch takes 2-3 minutes)
 
 ## Running Your First Pipeline
+
+### Step 5: Register the Pipeline
 
 Deploy the pipeline definition to SageMaker:
 
@@ -65,18 +138,36 @@ cd workflows
 # Install dependencies
 uv sync
 
-# Deploy the pipeline (creates/updates the pipeline definition)
-python -m src.workflows.sagemaker_fraud_detection_pipeline \
+# Register the pipeline (creates/updates the pipeline definition)
+uv run python src/workflows/sagemaker_fraud_detection_pipeline.py \
   --role-arn <sagemaker-execution-role-arn-from-cdk-output> \
   --default-bucket fraud-detection-<account>-sm \
-  --region <your-region>
+  --region <your-region> \
+  --profile <your-aws-profile>
 ```
 
-This registers the pipeline with SageMaker. You can now trigger runs through:
+This registers the pipeline with SageMaker. You'll see: `Pipeline FraudDetectionPipeline created/updated.`
 
-**SageMaker Studio UI**: Navigate to Pipelines → FraudDetectionPipeline → Create execution. Adjust hyperparameters if needed, then start the run. The Studio interface shows real-time progress, logs, and metrics.
+### Step 6: Execute the Pipeline
 
-**Python SDK**: From a notebook or script:
+**Option 1: SageMaker Studio UI (Recommended)**
+
+1. In SageMaker Studio, click **Pipelines** in the left sidebar
+2. Find and click **FraudDetectionPipeline**
+3. Click **Create execution**
+4. Review parameters (or use defaults)
+5. Click **Start**
+6. Monitor execution progress in real-time with logs and metrics
+
+**Option 2: AWS CLI**
+
+```bash
+aws sagemaker start-pipeline-execution \
+  --pipeline-name FraudDetectionPipeline \
+  --profile <your-aws-profile>
+```
+
+**Option 3: Python SDK (SageMaker 3.x)**
 
 ```python
 from sagemaker.mlops.workflow.pipeline import Pipeline
@@ -86,15 +177,19 @@ execution = pipeline.start()
 execution.wait()
 ```
 
-**AWS CLI**:
+### Monitoring Execution
 
-```bash
-aws sagemaker start-pipeline-execution \
-  --pipeline-name FraudDetectionPipeline \
-  --pipeline-parameters Name=ProcessingInstanceType,Value=ml.g4dn.2xlarge
-```
+Each execution runs through three steps:
+1. **PreprocessData** - RAPIDS preprocessing (~10-15 minutes)
+2. **TrainModel** - GNN + XGBoost training (~5 minutes)
+3. **RegisterModel** - Model registration to Model Registry (~2 minutes)
 
-Each execution runs through preprocessing, training, and model registration. SageMaker automatically provisions GPU instances, runs the containers, stores artifacts in S3, and cleans up resources when complete. Step caching ensures that unchanged steps don't re-run on subsequent executions.
+SageMaker automatically provisions GPU instances, runs containers, stores artifacts in S3, and cleans up resources when complete. Step caching ensures unchanged steps don't re-run on subsequent executions.
+
+View execution details in Studio:
+- **Graph view**: Visual pipeline DAG with step status
+- **Execution list**: All pipeline runs with timestamps and status
+- **Step details**: Logs, metrics, input/output artifacts for each step
 
 ## Understanding the Workflow
 
@@ -121,7 +216,7 @@ The pipeline uses S3 for artifact passing between steps. SageMaker automatically
 │  Preprocessing       │
 │  (Processing Job)    │
 │  - RAPIDS/cuDF       │
-│  - ml.g4dn.2xlarge   │
+│  - ml.g4dn.4xlarge   │
 └──────────────────────┘
            │
            ▼
@@ -164,33 +259,96 @@ The pipeline uses S3 for artifact passing between steps. SageMaker automatically
 
 The trained model can be deployed to a SageMaker endpoint running NVIDIA Triton. The model accepts merchant features, cardholder features, and graph structure as inputs. It returns fraud probability plus Shapley values for explainability, which is critical for regulatory compliance and fraud analyst workflows.
 
+## Troubleshooting
+
+### Pipeline Execution Fails with "Service Limit" Error
+
+**Error:** `The account-level service limit 'ml.g4dn.2xlarge for processing job usage' is 0 Instances`
+
+**Solution:** You need to request service quota increases (see Prerequisites). This is required before running the pipeline.
+
+### CodeBuild Fails to Pull NGC Images
+
+**Error:** `Error response from daemon: Get https://nvcr.io/v2/: unauthorized`
+
+**Solution:** Verify NGC API key is correctly stored in Secrets Manager:
+
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id nvidia-ngc-api-key \
+  --profile <your-aws-profile>
+```
+
+### Pipeline Step Shows "Image Not Found"
+
+**Error:** `CannotPullContainerError: Error response from daemon: manifest for <image> not found`
+
+**Solution:** Wait for CodeBuild to finish building images. Check build status:
+
+```bash
+aws codebuild list-builds-for-project \
+  --project-name sagemaker-training-image-copy \
+  --profile <your-aws-profile>
+```
+
+### SageMaker Studio Won't Load
+
+**Solution:** First launch takes 2-3 minutes. If it times out, refresh the page. Check Domain status:
+
+```bash
+aws sagemaker describe-domain \
+  --domain-id <domain-id-from-cdk-output> \
+  --profile <your-aws-profile>
+```
+
+### Input Data Not Found
+
+**Error:** `ClientError: Could not find s3 object`
+
+**Solution:** Verify data is uploaded to the correct S3 path:
+
+```bash
+aws s3 ls s3://fraud-detection-<account>-sm/data/TabFormer/raw/ \
+  --profile <your-aws-profile>
+```
+
 ## What's Next
+
+### Hyperparameter Tuning
 
 The default hyperparameters work reasonably well, but you can tune them through pipeline parameters:
 
-- `gnn_num_epochs`: More epochs generally improve accuracy but increase training time
-- `xgb_num_boost_round`: XGBoost boosting rounds, higher values risk overfitting
-- `gnn_hidden_channels`: Width of the GNN layers, larger captures more patterns
+- `GnnNumEpochs`: More epochs generally improve accuracy but increase training time (default: 8)
+- `XgbNumBoostRound`: XGBoost boosting rounds, higher values risk overfitting (default: 512)
+- `GnnHiddenChannels`: Width of the GNN layers, larger captures more patterns (default: 32)
+- `GnnNHops`: Number of graph neighborhood hops (default: 2)
 
-Adjust these when starting a pipeline execution:
+Adjust these when starting a pipeline execution in Studio or via CLI:
 
-```python
-execution = pipeline.start(
-    parameters={
-        "GnnNumEpochs": 12,
-        "XgbNumBoostRound": 768,
-        "ProcessingInstanceType": "ml.g5.2xlarge"
-    }
-)
+```bash
+aws sagemaker start-pipeline-execution \
+  --pipeline-name FraudDetectionPipeline \
+  --pipeline-parameters \
+    Name=GnnNumEpochs,Value=12 \
+    Name=XgbNumBoostRound,Value=768 \
+  --profile <your-aws-profile>
 ```
 
-To use your own data, replace the `InputDataUrl` parameter with your S3 path. Ensure your CSV matches TabFormer's schema, or modify the preprocessing container to handle different data formats.
+### Using Your Own Data
+
+Replace the `InputDataUrl` parameter with your S3 path. Ensure your CSV matches TabFormer's schema:
+- Columns: `User`, `Card`, `Timestamp`, `Amount`, `Use Chip`, `Merchant Name`, `Merchant City`, `Merchant State`, `Zip`, `MCC`, `Errors?`, `Is Fraud?`
+
+Or modify `src/preprocess_TabFormer_sagemaker.py` to handle different data formats.
+
+### Production Considerations
 
 For production deployments, consider:
-- Setting up SageMaker Model Monitor for drift detection
-- Configuring SageMaker Pipelines schedules for automated retraining
-- Using SageMaker Projects for MLOps templates with CI/CD
-- Enabling VPC mode for SageMaker jobs if network isolation is required
+- **Model Monitoring**: Set up SageMaker Model Monitor for drift detection
+- **Automated Retraining**: Configure SageMaker Pipelines schedules for periodic retraining
+- **CI/CD**: Use SageMaker Projects for MLOps templates with automated testing
+- **Network Isolation**: Enable VPC mode for SageMaker jobs if required by security policies
+- **Cost Optimization**: Use Spot instances for training jobs to reduce costs by up to 70%
 
 ## Cleanup
 
