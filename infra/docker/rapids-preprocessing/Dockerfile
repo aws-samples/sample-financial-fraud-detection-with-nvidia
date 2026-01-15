@@ -1,16 +1,19 @@
 FROM nvcr.io/nvidia/rapidsai/base:25.12-cuda13-py3.12
 
 # Install SageMaker toolkit and dependencies required by preprocess_TabFormer_lp.py
-# RUN sudo apt install gcc
-# RUN pip install --no-cache-dir \
-#     sagemaker-training \
-#     category_encoders \
-#     scikit-learn \
-#     matplotlib \
-#     networkx \
-#     scipy
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV EXTRA_CONDA_PACKAGES="sagemaker-training category_encoders scikit-learn matplotlib networkx scipy"
+RUN pip install --no-cache-dir \
+    sagemaker-training \
+    category_encoders \
+    scikit-learn \
+    matplotlib \
+    networkx \
+    scipy
 
 # Copy preprocessing scripts
 # Assumes build context is the repository root
