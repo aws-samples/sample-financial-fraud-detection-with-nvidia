@@ -24,12 +24,12 @@ def main():
     parser.add_argument("--output-dir", type=str, default="/opt/ml/processing/output")
     args = parser.parse_args()
 
-    # Use output dir as base_path. preprocess_data() expects:
+    # Use /tmp as working directory since SageMaker output dirs are pre-created
+    # and the parent is read-only. preprocess_data() expects:
     #   base_path/raw/card_transaction.v1.csv (input)
     #   base_path/xgb/ (output)
     #   base_path/gnn/ (output)
-    # This way outputs are written directly where SageMaker expects them.
-    base_path = args.output_dir
+    base_path = "/tmp/tabformer"
     raw_dir = os.path.join(base_path, "raw")
     os.makedirs(raw_dir, exist_ok=True)
 
@@ -51,7 +51,7 @@ def main():
         os.system(f"ls -R {args.input_dir}")
         sys.exit(1)
 
-    # Copy input file to base_path/raw/ (not symlink - SageMaker can't upload symlinks)
+    # Copy input file to base_path/raw/
     target_file = os.path.join(raw_dir, "card_transaction.v1.csv")
     print(f"Copying {source_file} to {target_file}")
     shutil.copy2(source_file, target_file)
@@ -60,11 +60,18 @@ def main():
     preprocess_data(base_path)
     print("Preprocessing complete.")
 
-    # Clean up the copied input file to avoid uploading it
-    if os.path.exists(target_file):
-        os.remove(target_file)
-    if os.path.exists(raw_dir) and not os.listdir(raw_dir):
-        os.rmdir(raw_dir)
+    # Copy outputs to SageMaker output directories
+    xgb_src = os.path.join(base_path, "xgb")
+    gnn_src = os.path.join(base_path, "gnn")
+    xgb_dst = os.path.join(args.output_dir, "xgb")
+    gnn_dst = os.path.join(args.output_dir, "gnn")
+
+    print(f"Copying {xgb_src} to {xgb_dst}")
+    for f in os.listdir(xgb_src):
+        shutil.copy2(os.path.join(xgb_src, f), os.path.join(xgb_dst, f))
+
+    print(f"Copying {gnn_src} to {gnn_dst}")
+    shutil.copytree(gnn_src, gnn_dst, dirs_exist_ok=True)
 
     print(f"Output contents:")
     os.system(f"ls -R {args.output_dir}")
