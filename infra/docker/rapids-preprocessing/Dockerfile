@@ -18,6 +18,10 @@ RUN pip install --no-cache-dir \
     networkx \
     scipy
 
+# Switch back to root for SageMaker Processing Job execution
+# SageMaker creates output directories with restricted permissions
+USER root
+
 # Copy preprocessing scripts
 # Assumes build context is the repository root
 COPY src/preprocess_TabFormer_sagemaker.py preprocess.py
