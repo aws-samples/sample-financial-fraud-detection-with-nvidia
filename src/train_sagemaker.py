@@ -92,14 +92,22 @@ def main():
     ]
     
     print("Executing command:", " ".join(cmd))
-    
+
+    # Ensure CUDA forward compatibility libs are used
+    env = os.environ.copy()
+    cuda_compat_path = "/usr/local/cuda/compat"
+    if os.path.exists(cuda_compat_path):
+        env["LD_LIBRARY_PATH"] = f"{cuda_compat_path}:{env.get('LD_LIBRARY_PATH', '')}"
+        print(f"Set LD_LIBRARY_PATH={env['LD_LIBRARY_PATH']}")
+
     # Run and stream output
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        cwd="/app" # Run from /app to ensure imports work if needed
+        cwd="/app",  # Run from /app to ensure imports work if needed
+        env=env
     )
     
     for line in process.stdout:
