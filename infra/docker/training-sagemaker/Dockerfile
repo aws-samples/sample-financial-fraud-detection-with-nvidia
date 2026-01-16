@@ -1,8 +1,9 @@
 FROM nvcr.io/nvidia/cugraph/financial-fraud-training:2.0.0
 
 # Install CUDA Forward Compatibility package for older drivers
+# Use cuda-compat-13-0; if SageMaker logs show 'cudaErrorInsufficientDriver', try cuda-compat-12-2
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cuda-compat-12-8 \
+    cuda-compat-13-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable CUDA forward compatibility
