@@ -72,16 +72,17 @@ def main():
     xgb_dst = os.path.join(args.output_dir, "xgb")
     gnn_dst = os.path.join(args.output_dir, "gnn")
 
-    # Ensure output dirs exist and are writable
-    os.makedirs(xgb_dst, exist_ok=True)
-    os.makedirs(gnn_dst, exist_ok=True)
-
     print(f"Copying {xgb_src} to {xgb_dst}")
-    for f in os.listdir(xgb_src):
-        shutil.copy2(os.path.join(xgb_src, f), os.path.join(xgb_dst, f))
+    # Use copytree for both to handle permissions properly
+    # SageMaker output dirs may have restricted permissions
+    if os.path.exists(xgb_dst):
+        shutil.rmtree(xgb_dst)
+    shutil.copytree(xgb_src, xgb_dst)
 
     print(f"Copying {gnn_src} to {gnn_dst}")
-    shutil.copytree(gnn_src, gnn_dst, dirs_exist_ok=True)
+    if os.path.exists(gnn_dst):
+        shutil.rmtree(gnn_dst)
+    shutil.copytree(gnn_src, gnn_dst)
 
     print(f"Output contents:")
     os.system(f"ls -R {args.output_dir}")
