@@ -58,13 +58,13 @@ def get_pipeline(
         name="ProcessingInstanceCount", default_value=1
     )
     processing_instance_type = ParameterString(
-        name="ProcessingInstanceType", default_value="ml.g4dn.2xlarge"
+        name="ProcessingInstanceType", default_value="ml.g6e.2xlarge"
     )
     training_instance_count = ParameterInteger(
         name="TrainingInstanceCount", default_value=1
     )
     training_instance_type = ParameterString(
-        name="TrainingInstanceType", default_value="ml.g4dn.2xlarge"
+        name="TrainingInstanceType", default_value="ml.g6e.2xlarge"
     )
 
     # S3 paths
@@ -99,7 +99,7 @@ def get_pipeline(
 
     processor = Processor(
         image_uri=processing_image_uri,
-        instance_type="ml.g4dn.2xlarge",
+        instance_type="ml.g6e.2xlarge",
         instance_count=1,
         base_job_name=f"{base_job_prefix}-preprocess",
         sagemaker_session=pipeline_session,
@@ -154,7 +154,7 @@ def get_pipeline(
     model_trainer = ModelTrainer(
         training_image=training_image_uri,
         compute=Compute(
-            instance_type="ml.g4dn.2xlarge",
+            instance_type="ml.g6e.2xlarge",
             instance_count=1,
         ),
         base_job_name=f"{base_job_prefix}-train",
@@ -220,7 +220,7 @@ def get_pipeline(
             model_package_group_name=model_package_group_name,
             content_types=["application/json"],
             response_types=["application/json"],
-            inference_instances=["ml.g4dn.2xlarge"],
+            inference_instances=["ml.g6e.2xlarge"],
             approval_status="PendingManualApproval",
         ),
     )
