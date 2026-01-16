@@ -73,16 +73,24 @@ def main():
     gnn_dst = os.path.join(args.output_dir, "gnn")
 
     print(f"Copying {xgb_src} to {xgb_dst}")
-    # Use copytree for both to handle permissions properly
-    # SageMaker output dirs may have restricted permissions
-    if os.path.exists(xgb_dst):
-        shutil.rmtree(xgb_dst)
-    shutil.copytree(xgb_src, xgb_dst)
+    # SageMaker pre-creates output directories with restricted permissions
+    # Copy files into existing directories rather than replacing them
+    for item in os.listdir(xgb_src):
+        src_item = os.path.join(xgb_src, item)
+        dst_item = os.path.join(xgb_dst, item)
+        if os.path.isdir(src_item):
+            shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src_item, dst_item)
 
     print(f"Copying {gnn_src} to {gnn_dst}")
-    if os.path.exists(gnn_dst):
-        shutil.rmtree(gnn_dst)
-    shutil.copytree(gnn_src, gnn_dst)
+    for item in os.listdir(gnn_src):
+        src_item = os.path.join(gnn_src, item)
+        dst_item = os.path.join(gnn_dst, item)
+        if os.path.isdir(src_item):
+            shutil.copytree(src_item, dst_item, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src_item, dst_item)
 
     print(f"Output contents:")
     os.system(f"ls -R {args.output_dir}")
