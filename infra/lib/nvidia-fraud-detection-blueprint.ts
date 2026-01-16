@@ -80,7 +80,6 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
     const g4dnNodePoolSpec: blueprints.NodePoolV1Spec = {
       labels: {
         "node-type": "gpu",
-        "instance-family": "g4dn",
         "nvidia.com/gpu": "true",
         workload: "ml-inference",
       },
