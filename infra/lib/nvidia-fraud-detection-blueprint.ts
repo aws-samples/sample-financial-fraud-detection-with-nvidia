@@ -41,7 +41,6 @@ export interface NvidiaFraudDetectionBlueprintProps extends cdk.StackProps {
    * The hostname in route53
    */
   hostname: string;
-
 }
 
 export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
@@ -103,7 +102,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
         },
       ],
 
-      // Requirements for g4dn instance selection
+      // Requirements for GPU instance selection
       requirements: [
         {
           key: "karpenter.sh/capacity-type",
@@ -114,7 +113,8 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
           key: "node.kubernetes.io/instance-type",
           operator: "In",
           values: [
-            "g4dn.2xlarge", // 1 GPU, 8 vCPUs, 32 GB - minimum for 24M row cuDF
+            "g4dn.4xlarge", // 1 GPU, 8 vCPUs, 64 GB - minimum for 24M row cuDF
+            "g6e.2xlarge",
           ],
         },
         { key: "kubernetes.io/arch", operator: "In", values: ["amd64"] },
@@ -272,7 +272,7 @@ export class NvidiaFraudDetectionBlueprint extends cdk.Stack {
         dataBucketName: props.dataBucketName,
         modelBucketName: props.modelRegistryBucketName,
         hostname: props.hostname,
-        email: "zjacobso@amazon.com"
+        email: "zjacobso@amazon.com",
       }),
     ];
 
