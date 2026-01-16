@@ -60,11 +60,21 @@ def main():
     preprocess_data(base_path)
     print("Preprocessing complete.")
 
+    # Debug: check output directory state
+    print(f"Output dir contents and permissions:")
+    os.system(f"ls -la {args.output_dir}")
+    os.system(f"ls -la {args.output_dir}/xgb 2>/dev/null || echo 'xgb dir does not exist'")
+    os.system(f"ls -la {args.output_dir}/gnn 2>/dev/null || echo 'gnn dir does not exist'")
+
     # Copy outputs to SageMaker output directories
     xgb_src = os.path.join(base_path, "xgb")
     gnn_src = os.path.join(base_path, "gnn")
     xgb_dst = os.path.join(args.output_dir, "xgb")
     gnn_dst = os.path.join(args.output_dir, "gnn")
+
+    # Ensure output dirs exist and are writable
+    os.makedirs(xgb_dst, exist_ok=True)
+    os.makedirs(gnn_dst, exist_ok=True)
 
     print(f"Copying {xgb_src} to {xgb_dst}")
     for f in os.listdir(xgb_src):
