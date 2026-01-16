@@ -49,7 +49,7 @@ def get_pipeline(
     account_id = sagemaker_session.account_id()
 
     # Cache config for pipeline steps
-    cache_config = CacheConfig(enable_caching=False, expire_after="30d")
+    cache_config = CacheConfig(enable_caching=True, expire_after="30d")
 
     # ========================================================================
     # Parameters
@@ -58,13 +58,13 @@ def get_pipeline(
         name="ProcessingInstanceCount", default_value=1
     )
     processing_instance_type = ParameterString(
-        name="ProcessingInstanceType", default_value="ml.g6e.2xlarge"
+        name="ProcessingInstanceType", default_value="ml.g4dn.4xlarge"
     )
     training_instance_count = ParameterInteger(
         name="TrainingInstanceCount", default_value=1
     )
     training_instance_type = ParameterString(
-        name="TrainingInstanceType", default_value="ml.g6e.2xlarge"
+        name="TrainingInstanceType", default_value="ml.g6.xlarge"
     )
 
     # S3 paths
@@ -99,7 +99,7 @@ def get_pipeline(
 
     processor = Processor(
         image_uri=processing_image_uri,
-        instance_type="ml.g6e.2xlarge",
+        instance_type="ml.g4dn.4xlarge",
         instance_count=1,
         base_job_name=f"{base_job_prefix}-preprocess",
         sagemaker_session=pipeline_session,
@@ -154,7 +154,7 @@ def get_pipeline(
     model_trainer = ModelTrainer(
         training_image=training_image_uri,
         compute=Compute(
-            instance_type="ml.g6e.2xlarge",
+            instance_type="ml.g6.xlarge",
             instance_count=1,
         ),
         base_job_name=f"{base_job_prefix}-train",
