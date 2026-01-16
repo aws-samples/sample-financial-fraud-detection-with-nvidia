@@ -21,11 +21,12 @@ except ImportError:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", type=str, default="/opt/ml/processing/input")
-    parser.add_argument("--output-dir", type=str, default="/opt/ml/processing/output")
+    parser.add_argument("--xgb-output-dir", type=str, default="/opt/ml/processing/xgb")
+    parser.add_argument("--gnn-output-dir", type=str, default="/opt/ml/processing/gnn")
     args = parser.parse_args()
 
-    # Use /tmp as working directory since SageMaker output dirs are pre-created
-    # and the parent is read-only. preprocess_data() expects:
+    # Use /tmp as working directory since SageMaker output dirs may have
+    # permission issues. preprocess_data() expects:
     #   base_path/raw/card_transaction.v1.csv (input)
     #   base_path/xgb/ (output)
     #   base_path/gnn/ (output)
@@ -60,31 +61,22 @@ def main():
     preprocess_data(base_path)
     print("Preprocessing complete.")
 
-    # Debug: check output directory state
-    print(f"Output dir contents and permissions:")
-    os.system(f"ls -la {args.output_dir}")
-    os.system(f"ls -la {args.output_dir}/xgb 2>/dev/null || echo 'xgb dir does not exist'")
-    os.system(f"ls -la {args.output_dir}/gnn 2>/dev/null || echo 'gnn dir does not exist'")
-
     # Copy outputs to SageMaker output directories
     xgb_src = os.path.join(base_path, "xgb")
     gnn_src = os.path.join(base_path, "gnn")
-    xgb_dst = os.path.join(args.output_dir, "xgb")
-    gnn_dst = os.path.join(args.output_dir, "gnn")
 
-    # Ensure output dirs exist and are writable
-    os.makedirs(xgb_dst, exist_ok=True)
-    os.makedirs(gnn_dst, exist_ok=True)
-
-    print(f"Copying {xgb_src} to {xgb_dst}")
+    print(f"Copying {xgb_src} to {args.xgb_output_dir}")
+    os.makedirs(args.xgb_output_dir, exist_ok=True)
     for f in os.listdir(xgb_src):
-        shutil.copy2(os.path.join(xgb_src, f), os.path.join(xgb_dst, f))
+        shutil.copy2(os.path.join(xgb_src, f), os.path.join(args.xgb_output_dir, f))
 
-    print(f"Copying {gnn_src} to {gnn_dst}")
-    shutil.copytree(gnn_src, gnn_dst, dirs_exist_ok=True)
+    print(f"Copying {gnn_src} to {args.gnn_output_dir}")
+    shutil.copytree(gnn_src, args.gnn_output_dir, dirs_exist_ok=True)
 
-    print(f"Output contents:")
-    os.system(f"ls -R {args.output_dir}")
+    print(f"XGB output contents:")
+    os.system(f"ls -R {args.xgb_output_dir}")
+    print(f"GNN output contents:")
+    os.system(f"ls -R {args.gnn_output_dir}")
 
 
 if __name__ == "__main__":

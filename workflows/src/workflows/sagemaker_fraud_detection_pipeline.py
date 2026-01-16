@@ -125,7 +125,7 @@ def get_pipeline(
                 output_name="xgb",
                 s3_output=ProcessingS3Output(
                     s3_uri=f"s3://{default_bucket}/data/processed/xgb",
-                    local_path="/opt/ml/processing/output/xgb",
+                    local_path="/opt/ml/processing/xgb",
                     s3_upload_mode="EndOfJob",
                 ),
             ),
@@ -133,7 +133,7 @@ def get_pipeline(
                 output_name="gnn",
                 s3_output=ProcessingS3Output(
                     s3_uri=f"s3://{default_bucket}/data/processed/gnn",
-                    local_path="/opt/ml/processing/output/gnn",
+                    local_path="/opt/ml/processing/gnn",
                     s3_upload_mode="EndOfJob",
                 ),
             ),
