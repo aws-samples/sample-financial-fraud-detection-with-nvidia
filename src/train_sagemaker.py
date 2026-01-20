@@ -138,7 +138,6 @@ def main():
 
     # Execute the original training script
     cmd = [
-        "CUDA_VISIBLE_DEVICES=0",
         "torchrun",
         "--standalone",
         "--nnodes=1",
