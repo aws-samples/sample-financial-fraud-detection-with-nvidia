@@ -20,7 +20,7 @@ from sagemaker.mlops.workflow.pipeline import Pipeline
 from sagemaker.mlops.workflow.steps import CacheConfig, ProcessingStep, TrainingStep
 from sagemaker.serve.model_builder import ModelBuilder
 from sagemaker.train import ModelTrainer
-from sagemaker.train.configs import Compute, InputData
+from sagemaker.train.configs import Compute, InputData, OutputDataConfig
 
 
 def get_session(region, default_bucket, profile_name=None):
@@ -191,6 +191,9 @@ def get_pipeline(
                 content_type="text/csv",
             ),
         ],
+        output_data_config=OutputDataConfig(
+            s3_output_path=f"s3://{default_bucket}/model-repository"
+        ),
     )
 
     train_args = model_trainer.train()
