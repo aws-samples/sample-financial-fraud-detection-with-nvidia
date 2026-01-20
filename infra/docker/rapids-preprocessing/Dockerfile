@@ -8,6 +8,7 @@ RUN mkdir -p /var/lib/apt/lists/partial && \
     apt-get install -y --no-install-recommends gcc g++ && \
     rm -rf /var/lib/apt/lists/*
 
+# Install as rapids user (for cache locality with base image)
 USER rapids
 
 RUN pip install --no-cache-dir \
@@ -17,6 +18,9 @@ RUN pip install --no-cache-dir \
     matplotlib \
     networkx \
     scipy
+
+# Switch back to root for SageMaker (needs write access to /opt/ml/processing/*)
+USER root
 
 # Copy preprocessing scripts
 # Assumes build context is the repository root
