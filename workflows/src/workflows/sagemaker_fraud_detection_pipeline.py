@@ -49,7 +49,8 @@ def get_pipeline(
     account_id = sagemaker_session.account_id()
 
     # Cache config for pipeline steps
-    cache_config = CacheConfig(enable_caching=False, expire_after="30d")
+    cache_true_config = CacheConfig(enable_caching=True, expire_after="1d")
+    cache_false_config = CacheConfig(enable_caching=False, expire_after="1d")
 
     # ========================================================================
     # Parameters
@@ -143,7 +144,7 @@ def get_pipeline(
     step_process = ProcessingStep(
         name="PreprocessData",
         step_args=processor_args,
-        cache_config=cache_config,
+        cache_config=cache_true_config,
     )
 
     # ========================================================================
@@ -197,7 +198,7 @@ def get_pipeline(
     step_train = TrainingStep(
         name="TrainModel",
         step_args=train_args,
-        cache_config=cache_config,
+        cache_config=cache_false_config,
     )
 
     # ========================================================================
