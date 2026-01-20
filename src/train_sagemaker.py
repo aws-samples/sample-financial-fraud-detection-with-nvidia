@@ -1,8 +1,9 @@
-import os
-import json
-import sys
-import subprocess
 import argparse
+import json
+import os
+import subprocess
+import sys
+
 
 def setup_cuda_compat():
     """Find and configure CUDA forward compatibility libraries."""
@@ -33,18 +34,23 @@ def setup_cuda_compat():
     if found_compat:
         # Prepend to LD_LIBRARY_PATH
         current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-        new_ld_path = f"{found_compat}:{current_ld_path}" if current_ld_path else found_compat
+        new_ld_path = (
+            f"{found_compat}:{current_ld_path}" if current_ld_path else found_compat
+        )
         os.environ["LD_LIBRARY_PATH"] = new_ld_path
         print(f"Set LD_LIBRARY_PATH={new_ld_path[:200]}...")
     else:
         print("WARNING: Could not find CUDA compat libraries!")
         # Debug: show what's installed
         os.system("find /usr/local -name 'libcuda*' 2>/dev/null | head -20")
-        os.system("ls -la /usr/local/cuda*/compat/ 2>/dev/null || echo 'No compat dirs found'")
+        os.system(
+            "ls -la /usr/local/cuda*/compat/ 2>/dev/null || echo 'No compat dirs found'"
+        )
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    
+
     # SageMaker Hyperparameters
     parser.add_argument("--gnn_hidden_channels", type=int, default=32)
     parser.add_argument("--gnn_n_hops", type=int, default=2)
@@ -53,18 +59,25 @@ def parse_args():
     parser.add_argument("--gnn_batch_size", type=int, default=4096)
     parser.add_argument("--gnn_fan_out", type=int, default=10)
     parser.add_argument("--gnn_num_epochs", type=int, default=8)
-    
+
     parser.add_argument("--xgb_max_depth", type=int, default=6)
     parser.add_argument("--xgb_learning_rate", type=float, default=0.2)
     parser.add_argument("--xgb_num_parallel_tree", type=int, default=3)
     parser.add_argument("--xgb_num_boost_round", type=int, default=512)
     parser.add_argument("--xgb_gamma", type=float, default=0.0)
-    
+
     # Container environment paths
-    parser.add_argument("--model-dir", type=str, default=os.environ.get("SM_MODEL_DIR", "/opt/ml/model"))
-    parser.add_argument("--train-dir", type=str, default=os.environ.get("SM_CHANNEL_GNN", "/opt/ml/input/data/gnn"))
-    
+    parser.add_argument(
+        "--model-dir", type=str, default=os.environ.get("SM_MODEL_DIR", "/opt/ml/model")
+    )
+    parser.add_argument(
+        "--train-dir",
+        type=str,
+        default=os.environ.get("SM_CHANNEL_GNN", "/opt/ml/input/data/gnn"),
+    )
+
     return parser.parse_known_args()
+
 
 def main():
     # Setup CUDA compat first, before any CUDA initialization
@@ -80,19 +93,16 @@ def main():
     print("=" * 60)
 
     args, unknown = parse_args()
-    
+
     print("Received arguments:", args)
-    
+
     # Define output directory for the model artifacts
     output_dir = os.path.join(args.model_dir, "python_backend_model_repository")
     os.makedirs(output_dir, exist_ok=True)
 
     # Construct config.json
     config = {
-        "paths": {
-            "data_dir": args.train_dir,
-            "output_dir": output_dir
-        },
+        "paths": {"data_dir": args.train_dir, "output_dir": output_dir},
         "models": [
             {
                 "kind": "GNN_XGBoost",
@@ -118,27 +128,28 @@ def main():
             }
         ],
     }
-    
+
     config_path = "/app/config.json"
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    
+
     print(f"Generated {config_path}:")
     print(json.dumps(config, indent=2))
-    
+
     # Execute the original training script
     cmd = [
+        "CUDA_VISIBLE_DEVICES=0",
         "torchrun",
         "--standalone",
         "--nnodes=1",
         "--nproc-per-node=1",
         "/app/main.py",
         "--config",
-        config_path
+        config_path,
     ]
-    
+
     print("Executing command:", " ".join(cmd))
-    
+
     # Run with explicit environment including LD_LIBRARY_PATH
     env = os.environ.copy()
 
@@ -148,26 +159,27 @@ def main():
         stderr=subprocess.STDOUT,
         text=True,
         cwd="/app",
-        env=env
+        env=env,
     )
-    
+
     for line in process.stdout:
         print(line, end="")
-        
+
     process.wait()
-    
+
     if process.returncode != 0:
         print(f"Training failed with return code {process.returncode}")
         sys.exit(process.returncode)
-        
+
     print("Training complete.")
-    
+
     # Verify output
     if os.path.exists(output_dir):
         print(f"Contents of {output_dir}:")
         os.system(f"ls -R {output_dir}")
     else:
         print(f"Warning: Output directory {output_dir} does not exist.")
+
 
 if __name__ == "__main__":
     main()

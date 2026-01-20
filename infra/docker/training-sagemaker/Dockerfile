@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y cuda-compat-13-0 && rm -rf /var/lib/apt
 # Set LD_LIBRARY_PATH to use the forward compatibility libraries
 ENV LD_LIBRARY_PATH=/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH}
 
+ENV CUDA_VISIBLE_DEVICES=0
+
 # Install SageMaker training toolkit
 RUN pip install sagemaker-training
 
