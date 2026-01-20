@@ -7,45 +7,52 @@ import sys
 
 def setup_cuda_compat():
     """Find and configure CUDA forward compatibility libraries."""
-    # Search for cuda-compat libraries
-    compat_paths = [
+    import glob
+    # Known CUDA compat paths (in order of preference)
+    cuda_compat_paths = [
         "/usr/local/cuda-13.0/compat",
+        "/usr/local/cuda-13/compat",
         "/usr/local/cuda/compat",
-        "/usr/lib/x86_64-linux-gnu",
     ]
 
-    # Also search for any cuda-compat installation
-    for cuda_dir in ["/usr/local/cuda-13.0", "/usr/local/cuda-13", "/usr/local/cuda"]:
-        compat_dir = os.path.join(cuda_dir, "compat")
-        if os.path.isdir(compat_dir):
-            compat_paths.insert(0, compat_dir)
+    current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
 
-    # Find where libcuda.so actually lives in compat
-    found_compat = None
-    for path in compat_paths:
-        if os.path.isdir(path):
-            files = os.listdir(path)
-            if any("libcuda" in f for f in files):
-                found_compat = path
-                print(f"Found CUDA compat libraries in: {path}")
-                print(f"Contents: {files[:10]}...")
-                break
+    # Find and add compat paths to LD_LIBRARY_PATH
+    # Find valid compat paths and prepend them
+    valid_paths = []
+    for path in cuda_compat_paths:
+        if os.path.isdir(path) and path not in current_ld_path:
+            valid_paths.append(path)
+            print(f"Adding CUDA compat path: {path}")
+            if os.path.isdir(path):
+                print(f"  Contents: {os.listdir(path)[:5]}")
 
-    if found_compat:
-        # Prepend to LD_LIBRARY_PATH
-        current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-        new_ld_path = (
-            f"{found_compat}:{current_ld_path}" if current_ld_path else found_compat
-        )
+    if valid_paths:
+        new_ld_path = ":".join(valid_paths) + ":" + current_ld_path if current_ld_path else ":".join(valid_paths)
         os.environ["LD_LIBRARY_PATH"] = new_ld_path
-        print(f"Set LD_LIBRARY_PATH={new_ld_path[:200]}...")
+        print(f"LD_LIBRARY_PATH now starts with: {new_ld_path[:150]}...")
     else:
-        print("WARNING: Could not find CUDA compat libraries!")
-        # Debug: show what's installed
-        os.system("find /usr/local -name 'libcuda*' 2>/dev/null | head -20")
-        os.system(
-            "ls -la /usr/local/cuda*/compat/ 2>/dev/null || echo 'No compat dirs found'"
-        )
+        # Check if compat is already first
+        if any(current_ld_path.startswith(p) for p in cuda_compat_paths):
+            print(f"CUDA compat already configured in LD_LIBRARY_PATH")
+        else:
+            print("WARNING: No CUDA compat paths found!")
+            os.system("ls -la /usr/local/cuda*/compat/ 2>/dev/null || echo 'No compat dirs'")
+
+    # Also try LD_PRELOAD for the specific libcuda.so to ensure it loads first
+    for path in cuda_compat_paths:
+        libcuda_files = glob.glob(os.path.join(path, "libcuda.so.*.*"))
+        if libcuda_files:
+            # Get the actual library file (not symlink targets)
+            libcuda = sorted(libcuda_files)[-1]  # Get newest version
+            current_preload = os.environ.get("LD_PRELOAD", "")
+            if libcuda not in current_preload:
+                new_preload = f"{libcuda}:{current_preload}" if current_preload else libcuda
+                os.environ["LD_PRELOAD"] = new_preload
+                print(f"Set LD_PRELOAD={new_preload}")
+            break
+
+    print(f"Final LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', '')[:200]}")
 
 
 def parse_args():
