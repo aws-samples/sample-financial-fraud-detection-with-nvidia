@@ -1,5 +1,7 @@
 FROM nvcr.io/nvidia/cugraph/financial-fraud-training:2.0.0
 
+RUN sudo apt-get install cuda-compat
+
 # Install SageMaker training toolkit
 RUN pip install sagemaker-training
 
