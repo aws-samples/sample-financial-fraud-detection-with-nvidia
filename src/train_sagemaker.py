@@ -97,7 +97,7 @@ def main():
     args, _ = parse_args()
     print(f"Arguments: {args}")
 
-    output_dir = Path(args.model_dir) / "python_backend_model_repository"
+    output_dir = Path(args.model_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = {

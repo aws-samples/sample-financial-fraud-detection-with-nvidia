@@ -34,6 +34,66 @@ def get_session(region, default_bucket, profile_name=None):
     return sagemaker_session, pipeline_session
 
 
+def deploy_endpoint(
+    region: str,
+    role_arn: str,
+    default_bucket: str,
+    endpoint_name: str = "fraud-detection-endpoint",
+    instance_type: str = "ml.g6e.2xlarge",
+    initial_instance_count: int = 1,
+    model_package_group_name: str = "fraud-detection-models",
+    profile_name: str = None,
+):
+    """Deploy the latest approved model from the model package group."""
+    sagemaker_session, _ = get_session(region, default_bucket, profile_name)
+    account_id = sagemaker_session.account_id()
+
+    # Get latest approved model package
+    sm_client = boto3.client(
+        "sagemaker",
+        region_name=region,
+    )
+    response = sm_client.list_model_packages(
+        ModelPackageGroupName=model_package_group_name,
+        ModelApprovalStatus="Approved",
+        SortBy="CreationTime",
+        SortOrder="Descending",
+        MaxResults=1,
+    )
+
+    if not response.get("ModelPackageSummaryList"):
+        raise ValueError(
+            f"No approved models found in group '{model_package_group_name}'. "
+            "Approve a model first in SageMaker Model Registry."
+        )
+
+    model_package_arn = response["ModelPackageSummaryList"][0]["ModelPackageArn"]
+    print(f"Deploying model package: {model_package_arn}")
+
+    triton_image_uri = (
+        f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
+    )
+
+    model_builder = ModelBuilder(
+        model_package_arn=model_package_arn,
+        image_uri=triton_image_uri,
+        sagemaker_session=sagemaker_session,
+        role_arn=role_arn,
+    )
+
+    model_builder.build()
+
+    endpoint = model_builder.deploy(
+        endpoint_name=endpoint_name,
+        instance_type=instance_type,
+        initial_instance_count=initial_instance_count,
+        wait=True,
+    )
+
+    print(f"Endpoint '{endpoint_name}' deployed successfully.")
+    return endpoint
+
+
 def get_pipeline(
     region,
     role_arn,
@@ -48,13 +108,10 @@ def get_pipeline(
     )
     account_id = sagemaker_session.account_id()
 
-    # Cache config for pipeline steps
     cache_true_config = CacheConfig(enable_caching=True, expire_after="1d")
     cache_false_config = CacheConfig(enable_caching=False, expire_after="1d")
 
-    # ========================================================================
     # Parameters
-    # ========================================================================
     processing_instance_count = ParameterInteger(
         name="ProcessingInstanceCount", default_value=1
     )
@@ -68,7 +125,6 @@ def get_pipeline(
         name="TrainingInstanceType", default_value="ml.g6e.2xlarge"
     )
 
-    # S3 paths
     input_data_url = ParameterString(
         name="InputDataUrl",
         default_value=f"s3://{default_bucket}/data/TabFormer/raw/card_transaction.v1.csv",
@@ -90,10 +146,7 @@ def get_pipeline(
     xgb_num_boost_round = ParameterInteger(name="XgbNumBoostRound", default_value=512)
     xgb_gamma = ParameterFloat(name="XgbGamma", default_value=0.0)
 
-    # ========================================================================
     # Step 1: Preprocessing (RAPIDS)
-    # ========================================================================
-    # Image URI for the custom RAPIDS container
     processing_image_uri = (
         f"{account_id}.dkr.ecr.{region}.amazonaws.com/rapids-preprocessing:latest"
     )
@@ -107,7 +160,6 @@ def get_pipeline(
         role=role_arn,
     )
 
-    # Note: The preprocessing container has the script built-in as entrypoint
     processor_args = processor.run(
         inputs=[
             ProcessingInput(
@@ -147,9 +199,7 @@ def get_pipeline(
         cache_config=cache_true_config,
     )
 
-    # ========================================================================
     # Step 2: Training (GNN+XGBoost)
-    # ========================================================================
     training_image_uri = f"{account_id}.dkr.ecr.{region}.amazonaws.com/nvidia-training-repo-sagemaker:latest"
 
     model_trainer = ModelTrainer(
@@ -204,9 +254,7 @@ def get_pipeline(
         cache_config=cache_false_config,
     )
 
-    # ========================================================================
     # Step 3: Register Model
-    # ========================================================================
     triton_image_uri = (
         f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
     )
@@ -229,9 +277,7 @@ def get_pipeline(
         ),
     )
 
-    # ========================================================================
     # Pipeline
-    # ========================================================================
     pipeline = Pipeline(
         name=pipeline_name,
         parameters=[
@@ -269,10 +315,46 @@ if __name__ == "__main__":
     parser.add_argument("--default-bucket", required=True, help="Default S3 bucket")
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--profile", default=None, help="AWS profile name")
+
+    subparsers = parser.add_subparsers(dest="command", help="Commands")
+
+    # Pipeline command
+    pipeline_parser = subparsers.add_parser("pipeline", help="Create/update pipeline")
+
+    # Deploy command
+    deploy_parser = subparsers.add_parser("deploy", help="Deploy endpoint")
+    deploy_parser.add_argument(
+        "--endpoint-name",
+        default="fraud-detection-endpoint",
+        help="Name for the endpoint",
+    )
+    deploy_parser.add_argument(
+        "--instance-type",
+        default="ml.g6e.2xlarge",
+        help="Instance type for endpoint",
+    )
+    deploy_parser.add_argument(
+        "--model-package-group",
+        default="fraud-detection-models",
+        help="Model package group name",
+    )
+
     args = parser.parse_args()
 
-    pipeline = get_pipeline(
-        args.region, args.role_arn, args.default_bucket, profile_name=args.profile
-    )
-    pipeline.upsert(role_arn=args.role_arn)
-    print(f"Pipeline {pipeline.name} created/updated.")
+    if args.command == "deploy":
+        endpoint = deploy_endpoint(
+            region=args.region,
+            role_arn=args.role_arn,
+            default_bucket=args.default_bucket,
+            endpoint_name=args.endpoint_name,
+            instance_type=args.instance_type,
+            model_package_group_name=args.model_package_group,
+            profile_name=args.profile,
+        )
+    else:
+        # Default: create/update pipeline
+        pipeline = get_pipeline(
+            args.region, args.role_arn, args.default_bucket, profile_name=args.profile
+        )
+        pipeline.upsert(role_arn=args.role_arn)
+        print(f"Pipeline {pipeline.name} created/updated.")
