@@ -3,11 +3,15 @@ import os
 import boto3
 from sagemaker.core.helper.session_helper import Session
 from sagemaker.core.processing import Processor
+from sagemaker.core.resources import Endpoint, EndpointConfig, Model
 from sagemaker.core.shapes import (
+    ContainerDefinition,
     ProcessingInput,
     ProcessingOutput,
     ProcessingS3Input,
     ProcessingS3Output,
+    ProductionVariant,
+    ProductionVariantManagedInstanceScaling,
 )
 from sagemaker.core.workflow.parameters import (
     ParameterFloat,
@@ -70,27 +74,58 @@ def deploy_endpoint(
     model_package_arn = response["ModelPackageSummaryList"][0]["ModelPackageArn"]
     print(f"Deploying model package: {model_package_arn}")
 
-    triton_image_uri = (
-        f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
-    )
+    # Create Model from model package
+    model_name = f"{endpoint_name}-model"
+    try:
+        model = Model.create(
+            model_name=model_name,
+            primary_container=ContainerDefinition(model_package_name=model_package_arn),
+            execution_role_arn=role_arn,
+        )
+        print(f"Created model: {model_name}")
+    except Exception as e:
+        if "already existing" in str(e):
+            print(f"Using existing model: {model_name}")
+        else:
+            raise
 
-    model_builder = ModelBuilder(
-        model_package_arn=model_package_arn,
-        image_uri=triton_image_uri,
-        sagemaker_session=sagemaker_session,
-        role_arn=role_arn,
-    )
+    # Create EndpointConfig
+    endpoint_config_name = f"{endpoint_name}-config"
+    try:
+        endpoint_config = EndpointConfig.create(
+            endpoint_config_name=endpoint_config_name,
+            production_variants=[
+                ProductionVariant(
+                    variant_name="AllTraffic",
+                    model_name=model_name,
+                    initial_instance_count=initial_instance_count,
+                    instance_type=instance_type,
+                )
+            ],
+        )
+        print(f"Created endpoint config: {endpoint_config_name}")
+    except Exception as e:
+        if "already existing" in str(e):
+            print(f"Using existing endpoint config: {endpoint_config_name}")
+        else:
+            raise
 
-    model_builder.build()
+    # Create Endpoint
+    try:
+        endpoint = Endpoint.create(
+            endpoint_name=endpoint_name,
+            endpoint_config_name=endpoint_config_name,
+        )
+        print(f"Creating endpoint: {endpoint_name}")
+    except Exception as e:
+        if "already existing" in str(e):
+            print(f"Using existing endpoint: {endpoint_name}")
+            endpoint = Endpoint.get(endpoint_name=endpoint_name)
+        else:
+            raise
 
-    endpoint = model_builder.deploy(
-        endpoint_name=endpoint_name,
-        instance_type=instance_type,
-        initial_instance_count=initial_instance_count,
-        wait=True,
-    )
-
-    print(f"Endpoint '{endpoint_name}' deployed successfully.")
+    endpoint.wait_for_status("InService")
+    print(f"Endpoint '{endpoint_name}' is now InService.")
     return endpoint
 
 
@@ -272,7 +307,14 @@ def get_pipeline(
             model_package_group_name=model_package_group_name,
             content_types=["application/json"],
             response_types=["application/json"],
-            inference_instances=["ml.g6e.2xlarge"],
+            inference_instances=[
+                "ml.g4dn.xlarge",
+                "ml.g4dn.2xlarge",
+                "ml.g5.xlarge",
+                "ml.g5.2xlarge",
+                "ml.g6e.xlarge",
+                "ml.g6e.2xlarge",
+            ],
             approval_status="PendingManualApproval",
         ),
     )
