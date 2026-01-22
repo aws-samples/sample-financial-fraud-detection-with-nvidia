@@ -11,7 +11,6 @@ from sagemaker.core.shapes import (
     ProcessingS3Input,
     ProcessingS3Output,
     ProductionVariant,
-    ProductionVariantManagedInstanceScaling,
 )
 from sagemaker.core.workflow.parameters import (
     ParameterFloat,
