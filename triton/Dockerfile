@@ -56,16 +56,16 @@ RUN conda install python=3.12
 #     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 RUN conda install --override-channels -c nvidia -c conda-forge \
-    pytorch=*=*cuda130* \
-    py-xgboost=*=*cuda130* \
+    pytorch=*=*cuda129* \
+    py-xgboost=*=*cuda129* \
     ncurses
 
 RUN conda install  --override-channels -c conda-forge cupy=13.4.1
 # Install PyTorch Geometric and Captum for CUDA 12.6 + torch 2.7.0
 RUN $CONDA_DIR/bin/pip install \
-    torch-geometric==2.6.1 \
-    captum==0.7.0 \
-    --extra-index-url https://data.pyg.org/whl/torch-2.7.0+cu126.html
+    torch-geometric \
+    captum==0.7 \
+    --extra-index-url https://data.pyg.org/whl/torch-2.9.0+cu129.html
 
 # RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
 #     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
