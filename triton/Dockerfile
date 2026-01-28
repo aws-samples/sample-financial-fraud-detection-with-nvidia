@@ -73,7 +73,7 @@ COPY nginx.conf /opt/nginx.conf
 COPY serve /usr/local/bin/serve
 RUN chmod +x /usr/local/bin/serve
 
-EXPOSE 8080 8081 8082
+EXPOSE 8080 8001 8002
 
 ENV SAGEMAKER_PROGRAM serve
 ENTRYPOINT ["/usr/local/bin/serve"]

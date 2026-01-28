@@ -92,6 +92,7 @@ export class TritonImageRepoStack extends cdk.Stack {
         privileged: true,
         computeType: codebuild.ComputeType.LARGE,
       },
+      cache: codebuild.Cache.local(codebuild.LocalCacheMode.DOCKER_LAYER),
       environmentVariables: {
         ECR_REPO_URI: { value: this.repository.repositoryUri },
         AWS_ACCOUNT_ID: { value: this.account },
