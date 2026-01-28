@@ -1,154 +1,256 @@
-# Makefile for GNN based financial fraud detection with Nvidia and AWS
-# Handles infrastructure deployment, pipeline execution, and local development
+# Fraud Detection - Full Project Makefile
+# ========================================
+# Wraps CDK infrastructure, SageMaker pipelines, and image builds
 
-# AWS Configuration
-AWS_REGION ?= us-west-2
-AWS_ACCOUNT_ID := $(shell aws sts get-caller-identity --query Account --output text 2>/dev/null)
-CLUSTER_NAME := nvidia-fraud-detection-cluster-blueprint
+SHELL := /bin/bash
+.PHONY: help install info \
+	cdk-synth cdk-deploy cdk-deploy-all cdk-diff cdk-destroy cdk-list \
+	pipeline deploy register \
+	build-triton build-training build-preprocessing build-all \
+	logs clean-endpoints
 
-# Container Images
-TRAINING_IMAGE := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/nvidia-training-repo:latest
-TRITON_IMAGE := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/triton-inference-server:latest
+# =============================================================================
+# Configuration - override with environment variables
+# =============================================================================
+AWS_PROFILE ?= zjacobso+nvidia-Admin
+AWS_REGION ?= us-east-1
+MODEL_PACKAGE_GROUP ?= fraud-detection-models
+ENDPOINT_NAME ?= fraud-detection-endpoint
+INSTANCE_TYPE ?= ml.g4dn.2xlarge
 
-# Kubeflow
-KF_NAMESPACE := team-1
+# CloudFormation stack names
+INFRA_STACK := SageMakerInfraStack
+BLUEPRINT_STACK := NvidiaFraudDetectionBlueprint
 
-# Python tooling - prefer uv if available
-UV := $(shell which uv 2>/dev/null)
-ifdef UV
-    PIP := uv pip
-    PYTHON := uv run python
+# Directories
+WORKFLOWS_DIR := workflows
+INFRA_DIR := infra
+
+# =============================================================================
+# CloudFormation Lookups (cached per make invocation)
+# =============================================================================
+ROLE_ARN := $(shell aws cloudformation describe-stacks \
+	--stack-name $(INFRA_STACK) \
+	--region $(AWS_REGION) \
+	--profile $(AWS_PROFILE) \
+	--query 'Stacks[0].Outputs[?OutputKey==`SageMakerExecutionRoleArn`].OutputValue' \
+	--output text 2>/dev/null)
+
+BUCKET := $(shell aws cloudformation describe-stacks \
+	--stack-name $(BLUEPRINT_STACK) \
+	--region $(AWS_REGION) \
+	--profile $(AWS_PROFILE) \
+	--query 'Stacks[0].Outputs[?OutputKey==`ModelBucketName`].OutputValue' \
+	--output text 2>/dev/null)
+
+# =============================================================================
+# Help
+# =============================================================================
+help:
+	@echo "Fraud Detection - Project Commands"
+	@echo "==================================="
+	@echo ""
+	@echo "Setup:"
+	@echo "  make install           - Install all dependencies (CDK + Python)"
+	@echo "  make info              - Show current configuration"
+	@echo ""
+	@echo "CDK Infrastructure:"
+	@echo "  make cdk-list          - List all stacks"
+	@echo "  make cdk-synth         - Synthesize CloudFormation templates"
+	@echo "  make cdk-diff          - Show infrastructure changes"
+	@echo "  make cdk-deploy STACK=StackName  - Deploy specific stack"
+	@echo "  make cdk-deploy-all    - Deploy all stacks"
+	@echo "  make cdk-destroy STACK=StackName - Destroy specific stack"
+	@echo ""
+	@echo "SageMaker Pipeline:"
+	@echo "  make pipeline          - Create/update the SageMaker pipeline"
+	@echo ""
+	@echo "Model Deployment:"
+	@echo "  make deploy            - Deploy endpoint (latest approved model)"
+	@echo "  make deploy ENDPOINT_NAME=name INSTANCE_TYPE=ml.g5.xlarge"
+	@echo "  make register          - Register new model package version"
+	@echo ""
+	@echo "Image Building:"
+	@echo "  make build-triton      - Build Triton inference image"
+	@echo "  make build-training    - Build training image"
+	@echo "  make build-preprocessing - Build preprocessing image"
+	@echo "  make build-all         - Build all images"
+	@echo ""
+	@echo "Utilities:"
+	@echo "  make logs              - Fetch latest endpoint logs"
+	@echo "  make clean-endpoints   - Delete all endpoint configs"
+	@echo ""
+	@echo "Current Config: AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION)"
+
+# =============================================================================
+# Setup & Info
+# =============================================================================
+install:
+	@echo "Installing CDK dependencies..."
+	cd $(INFRA_DIR) && npm install
+	@echo ""
+	@echo "Installing Python dependencies..."
+	cd $(WORKFLOWS_DIR) && uv sync
+	@echo ""
+	@echo "Done! Run 'make info' to verify configuration."
+
+info:
+	@echo "Current Configuration"
+	@echo "====================="
+	@echo "AWS_PROFILE:    $(AWS_PROFILE)"
+	@echo "AWS_REGION:     $(AWS_REGION)"
+	@echo "ROLE_ARN:       $(ROLE_ARN)"
+	@echo "BUCKET:         $(BUCKET)"
+	@echo ""
+	@echo "Deployment Settings"
+	@echo "==================="
+	@echo "ENDPOINT_NAME:  $(ENDPOINT_NAME)"
+	@echo "INSTANCE_TYPE:  $(INSTANCE_TYPE)"
+	@echo "MODEL_GROUP:    $(MODEL_PACKAGE_GROUP)"
+
+# =============================================================================
+# CDK Infrastructure Commands
+# =============================================================================
+cdk-list:
+	@cd $(INFRA_DIR) && npx cdk list --profile $(AWS_PROFILE)
+
+cdk-synth:
+	@cd $(INFRA_DIR) && npx cdk synth --profile $(AWS_PROFILE)
+
+cdk-diff:
+	@cd $(INFRA_DIR) && npx cdk diff --profile $(AWS_PROFILE)
+
+cdk-deploy:
+ifndef STACK
+	@echo "Usage: make cdk-deploy STACK=StackName"
+	@echo "Available stacks:"
+	@cd $(INFRA_DIR) && npx cdk list --profile $(AWS_PROFILE)
 else
-    PIP := pip
-    PYTHON := python
+	@cd $(INFRA_DIR) && npx cdk deploy $(STACK) --profile $(AWS_PROFILE) --require-approval never
 endif
 
-# Colors
-YELLOW := \033[0;33m
-GREEN := \033[0;32m
-RED := \033[0;31m
-NC := \033[0m
+cdk-deploy-all:
+	@echo "Deploying all stacks..."
+	@cd $(INFRA_DIR) && npx cdk deploy --all --profile $(AWS_PROFILE) --require-approval never
 
-.PHONY: help check-deps deploy destroy kubeconfig dashboard \
-        pipeline-compile pipeline-upload triton-status triton-models triton-build clean
+cdk-destroy:
+ifndef STACK
+	@echo "Usage: make cdk-destroy STACK=StackName"
+	@echo "Available stacks:"
+	@cd $(INFRA_DIR) && npx cdk list --profile $(AWS_PROFILE)
+else
+	@cd $(INFRA_DIR) && npx cdk destroy $(STACK) --profile $(AWS_PROFILE) --force
+endif
 
-help:
-	@echo "$(YELLOW)NVIDIA Financial Fraud Detection - Kubeflow on EKS$(NC)"
+# =============================================================================
+# SageMaker Pipeline Commands
+# =============================================================================
+pipeline:
+	@echo "Creating/updating SageMaker pipeline..."
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.sagemaker_fraud_detection_pipeline \
+		--role-arn "$(ROLE_ARN)" \
+		--default-bucket "$(BUCKET)" \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		pipeline
+
+deploy:
+	@echo "Deploying endpoint $(ENDPOINT_NAME) on $(INSTANCE_TYPE)..."
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.sagemaker_fraud_detection_pipeline \
+		--role-arn "$(ROLE_ARN)" \
+		--default-bucket "$(BUCKET)" \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		deploy \
+		--endpoint-name $(ENDPOINT_NAME) \
+		--instance-type $(INSTANCE_TYPE)
+
+register:
+	@echo "Registering new model package version..."
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.sagemaker_fraud_detection_pipeline \
+		--role-arn "$(ROLE_ARN)" \
+		--default-bucket "$(BUCKET)" \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		register
+
+# =============================================================================
+# Image Building (CodeBuild)
+# =============================================================================
+build-triton:
+	@echo "Triggering Triton image build..."
+	@aws codebuild start-build \
+		--project-name triton-inference-image-build \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'build.{id:id,status:buildStatus}' \
+		--output table
+
+build-training:
+	@echo "Triggering training image build..."
+	@aws codebuild start-build \
+		--project-name sagemaker-training-image-copy \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'build.{id:id,status:buildStatus}' \
+		--output table
+
+build-preprocessing:
+	@echo "Triggering preprocessing image build..."
+	@aws codebuild start-build \
+		--project-name sagemaker-preprocessing-image-build \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'build.{id:id,status:buildStatus}' \
+		--output table
+
+build-all: build-triton build-training build-preprocessing
 	@echo ""
-	@echo "$(GREEN)Infrastructure:$(NC)"
-	@echo "  deploy             Deploy all CDK stacks (EKS, Kubeflow, Triton)"
-	@echo "  destroy            Tear down all infrastructure"
-	@echo "  kubeconfig         Update kubeconfig for the cluster"
-	@echo ""
-	@echo "$(GREEN)Kubeflow:$(NC)"
-	@echo "  dashboard          Get Kubeflow dashboard URL"
-	@echo "  pipeline-compile   Compile the fraud detection pipeline"
-	@echo "  pipeline-upload    Upload compiled pipeline to Kubeflow"
-	@echo ""
-	@echo "$(GREEN)Triton:$(NC)"
-	@echo "  triton-status      Check Triton Inference Server status"
-	@echo "  triton-models      List loaded models"
-	@echo "  triton-build       Trigger Triton image rebuild"
-	@echo ""
-	@echo "$(GREEN)Development:$(NC)"
-	@echo "  check-deps         Verify required tools are installed"
-	@echo "  clean              Clean up local artifacts"
-	@echo ""
-	@echo "$(YELLOW)Configuration:$(NC)"
-	@echo "  AWS_REGION=$(AWS_REGION)"
-	@echo "  Python: $(if $(UV),uv,pip)"
-	@echo ""
-	@echo "$(YELLOW)Example:$(NC)"
-	@echo "  make deploy AWS_REGION=us-west-2"
+	@echo "All builds triggered. Check CodeBuild console for progress."
 
-#
-# Dependency Checks
-#
-check-deps:
-	@echo "$(YELLOW)Checking dependencies...$(NC)"
-	@which aws > /dev/null || (echo "$(RED)✗ AWS CLI not found$(NC)" && exit 1)
-	@echo "$(GREEN)✓ AWS CLI$(NC)"
-	@which kubectl > /dev/null || (echo "$(RED)✗ kubectl not found$(NC)" && exit 1)
-	@echo "$(GREEN)✓ kubectl$(NC)"
-	@which node > /dev/null || (echo "$(RED)✗ Node.js not found$(NC)" && exit 1)
-	@echo "$(GREEN)✓ Node.js$(NC)"
-	@which docker > /dev/null || (echo "$(RED)✗ Docker not found$(NC)" && exit 1)
-	@echo "$(GREEN)✓ Docker$(NC)"
-	@which uv > /dev/null && echo "$(GREEN)✓ uv$(NC)" || echo "$(YELLOW)○ uv not found (using pip)$(NC)"
-	@aws sts get-caller-identity > /dev/null 2>&1 || (echo "$(RED)✗ AWS credentials not configured$(NC)" && exit 1)
-	@echo "$(GREEN)✓ AWS credentials valid$(NC)"
-	@echo ""
-	@echo "$(GREEN)All required dependencies installed$(NC)"
+# =============================================================================
+# Utilities
+# =============================================================================
+logs:
+	@echo "Fetching latest endpoint logs..."
+	@LOG_GROUP=$$(aws logs describe-log-groups \
+		--log-group-name-prefix /aws/sagemaker/Endpoints/fraud-detection \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'logGroups | sort_by(@, &creationTime) | [-1].logGroupName' \
+		--output text 2>/dev/null); \
+	if [ -z "$$LOG_GROUP" ] || [ "$$LOG_GROUP" = "None" ]; then \
+		echo "No endpoint logs found."; \
+		exit 0; \
+	fi; \
+	STREAM=$$(aws logs describe-log-streams \
+		--log-group-name "$$LOG_GROUP" \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--order-by LastEventTime \
+		--descending \
+		--limit 1 \
+		--query 'logStreams[0].logStreamName' \
+		--output text); \
+	echo "Log group: $$LOG_GROUP"; \
+	echo "Log stream: $$STREAM"; \
+	echo ""; \
+	aws logs get-log-events \
+		--log-group-name "$$LOG_GROUP" \
+		--log-stream-name "$$STREAM" \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--limit 100 | jq -r '.events[].message'
 
-#
-# Infrastructure
-#
-deploy: check-deps
-	@echo "$(YELLOW)Deploying CDK stacks...$(NC)"
-	cd infra && npm install && npx cdk deploy --all --require-approval never
-	@echo "$(GREEN)Deployment complete$(NC)"
-	@$(MAKE) kubeconfig
-
-destroy:
-	@echo "$(RED)Destroying all infrastructure...$(NC)"
-	cd infra && npx cdk destroy --all --force
-	@echo "$(GREEN)Infrastructure destroyed$(NC)"
-
-kubeconfig:
-	@echo "$(YELLOW)Updating kubeconfig...$(NC)"
-	aws eks update-kubeconfig --region $(AWS_REGION) --name $(CLUSTER_NAME)
-	@echo "$(GREEN)kubeconfig updated$(NC)"
-
-#
-# Kubeflow
-#
-dashboard:
-	@echo "$(YELLOW)Kubeflow Dashboard:$(NC)"
-	@kubectl get svc -n deploykf-istio-gateway deploykf-gateway \
-		-o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null \
-		|| echo "Load balancer not ready"
-	@echo ""
-	@echo "Default credentials: user@example.com / user"
-
-pipeline-compile:
-	@echo "$(YELLOW)Compiling fraud detection pipeline...$(NC)"
-	@echo "Using: $(if $(UV),uv,pip)"
-	cd workflows && $(PIP) install -q kfp==2.10.1 kfp-kubernetes==1.4.0 && \
-		$(PYTHON) -m workflows.cudf_e2e_pipeline
-	@echo "$(GREEN)Pipeline compiled: workflows/fraud_detection_cudf_pipeline.yaml$(NC)"
-
-pipeline-upload: pipeline-compile
-	@echo "$(YELLOW)Upload the pipeline via Kubeflow UI:$(NC)"
-	@echo "1. Open the dashboard: make dashboard"
-	@echo "2. Navigate to Pipelines > Upload Pipeline"
-	@echo "3. Upload: workflows/fraud_detection_cudf_pipeline.yaml"
-
-#
-# Triton
-#
-triton-status:
-	@echo "$(YELLOW)Triton Inference Server Status:$(NC)"
-	@kubectl get pods -n triton -l app.kubernetes.io/name=triton-inference-server
-	@echo ""
-	@kubectl get deployment -n triton
-
-triton-models:
-	@echo "$(YELLOW)Checking Triton models...$(NC)"
-	@kubectl exec -n triton deploy/triton-server-triton-inference-server -- \
-		curl -s localhost:8000/v2/models | python3 -m json.tool 2>/dev/null \
-		|| echo "Triton not ready or no models loaded"
-
-triton-build:
-	@echo "$(YELLOW)Triggering Triton image rebuild...$(NC)"
-	aws codebuild start-build --project-name triton-inference-image-build --region $(AWS_REGION)
-	@echo "$(GREEN)Build started. Check CodeBuild console for progress.$(NC)"
-
-#
-# Development
-#
-clean:
-	@echo "$(YELLOW)Cleaning up...$(NC)"
-	-rm -f workflows/fraud_detection_cudf_pipeline.yaml
-	-rm -rf infra/cdk.out
-	-rm -rf infra/node_modules
-	@echo "$(GREEN)Cleanup complete$(NC)"
+clean-endpoints:
+	@echo "Deleting all endpoint configs..."
+	@aws sagemaker list-endpoint-configs \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'EndpointConfigs[].EndpointConfigName' \
+		--output text 2>/dev/null | tr '\t' '\n' | \
+		xargs -I {} aws sagemaker delete-endpoint-config \
+			--endpoint-config-name {} \
+			--profile $(AWS_PROFILE) \
+			--region $(AWS_REGION) 2>/dev/null || true
+	@echo "Done."
