@@ -37,6 +37,70 @@ def get_session(region, default_bucket, profile_name=None):
     return sagemaker_session, pipeline_session
 
 
+def register_model(
+    region: str,
+    model_package_group_name: str = "fraud-detection-models",
+    profile_name: str = None,
+    approval_status: str = "Approved",
+):
+    """Register a new model package version using the latest image and model artifacts."""
+    session = (
+        boto3.Session(region_name=region, profile_name=profile_name)
+        if profile_name
+        else boto3.Session(region_name=region)
+    )
+    sm_client = session.client("sagemaker")
+    account_id = session.client("sts").get_caller_identity()["Account"]
+
+    # Get latest model package (any status) to copy model data URL
+    response = sm_client.list_model_packages(
+        ModelPackageGroupName=model_package_group_name,
+        SortBy="CreationTime",
+        SortOrder="Descending",
+        MaxResults=1,
+    )
+
+    if not response.get("ModelPackageSummaryList"):
+        raise ValueError(
+            f"No model packages found in group '{model_package_group_name}'."
+        )
+
+    latest_arn = response["ModelPackageSummaryList"][0]["ModelPackageArn"]
+    latest_version = response["ModelPackageSummaryList"][0]["ModelPackageVersion"]
+    print(f"Latest model package: {latest_arn} (version {latest_version})")
+
+    existing = sm_client.describe_model_package(ModelPackageName=latest_arn)
+    model_data_url = existing["InferenceSpecification"]["Containers"][0]["ModelDataUrl"]
+    print(f"Model data URL: {model_data_url}")
+
+    # Register with fresh :latest image (will resolve to current digest)
+    triton_image_uri = (
+        f"{account_id}.dkr.ecr.{region}.amazonaws.com/triton-inference-server:latest"
+    )
+    print(f"Using image: {triton_image_uri}")
+
+    response = sm_client.create_model_package(
+        ModelPackageGroupName=model_package_group_name,
+        InferenceSpecification={
+            "Containers": [{"Image": triton_image_uri, "ModelDataUrl": model_data_url}],
+            "SupportedContentTypes": ["application/json"],
+            "SupportedResponseMIMETypes": ["application/json"],
+            "SupportedRealtimeInferenceInstanceTypes": [
+                "ml.g4dn.xlarge",
+                "ml.g4dn.2xlarge",
+                "ml.g5.xlarge",
+                "ml.g5.2xlarge",
+                "ml.g6e.xlarge",
+                "ml.g6e.2xlarge",
+            ],
+        },
+        ModelApprovalStatus=approval_status,
+    )
+
+    print(f"Created: {response['ModelPackageArn']}")
+    return response["ModelPackageArn"]
+
+
 def deploy_endpoint(
     region: str,
     role_arn: str,
@@ -371,13 +435,28 @@ if __name__ == "__main__":
     )
     deploy_parser.add_argument(
         "--instance-type",
-        default="ml.g6e.2xlarge",
         help="Instance type for endpoint",
     )
     deploy_parser.add_argument(
         "--model-package-group",
         default="fraud-detection-models",
         help="Model package group name",
+    )
+
+    # Register command
+    register_parser = subparsers.add_parser(
+        "register", help="Register new model package version"
+    )
+    register_parser.add_argument(
+        "--model-package-group",
+        default="fraud-detection-models",
+        help="Model package group name",
+    )
+    register_parser.add_argument(
+        "--approval-status",
+        default="Approved",
+        choices=["Approved", "PendingManualApproval", "Rejected"],
+        help="Approval status for the new model package",
     )
 
     args = parser.parse_args()
@@ -391,6 +470,13 @@ if __name__ == "__main__":
             instance_type=args.instance_type,
             model_package_group_name=args.model_package_group,
             profile_name=args.profile,
+        )
+    elif args.command == "register":
+        register_model(
+            region=args.region,
+            model_package_group_name=args.model_package_group,
+            profile_name=args.profile,
+            approval_status=args.approval_status,
         )
     else:
         # Default: create/update pipeline
