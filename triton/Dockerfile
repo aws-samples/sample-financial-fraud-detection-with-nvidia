@@ -8,7 +8,7 @@ ENV CONDA_DIR=/opt/miniconda
 # Install base dependencies and clean cache
 RUN apt-get update && apt-get install -y \
     wget curl git build-essential cmake sudo \
-    cuda-compat-13 \
+    cuda-compat-13-0 \
     # libnccl2 libnccl-dev \
     libopenblas-dev libssl-dev libtinfo-dev \
     && rm -rf /var/lib/apt/lists/*
