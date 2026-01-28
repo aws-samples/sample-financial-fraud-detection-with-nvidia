@@ -19,15 +19,35 @@ if [ ! -d "$MODEL_REPO" ]; then
     fi
 fi
 
-# Start Triton on internal port 8000
+# Start Triton in background
 echo "Starting Triton on port 8000..."
-exec tritonserver \
+tritonserver \
   --model-repository=$MODEL_REPO \
   --http-port=8000 \
   --grpc-port=8001 \
   --metrics-port=8002 \
-  --log-verbose=1
+  --backend-config=python,python-runtime=/opt/miniconda/bin/python \
+  --log-verbose=1 &
 
-# Start nginx in background (proxies /ping and /invocations for SageMaker)
+TRITON_PID=$!
+
+# Wait for Triton to be ready
+echo "Waiting for Triton to be ready..."
+for i in {1..120}; do
+    if curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; then
+        echo "Triton is ready!"
+        break
+    fi
+    if ! kill -0 $TRITON_PID 2>/dev/null; then
+        echo "Triton process died"
+        exit 1
+    fi
+    sleep 1
+done
+
+# Start nginx (proxies /ping and /invocations for SageMaker)
 echo "Starting nginx proxy on port 8080..."
-exec nginx -c /opt/nginx.conf &
+nginx -c /opt/nginx.conf
+
+# Keep container running by waiting on Triton
+wait $TRITON_PID
