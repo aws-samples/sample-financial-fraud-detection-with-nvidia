@@ -41,7 +41,7 @@ RUN set -eux; \
 # Set Conda Python as default
 ENV PATH="$CONDA_DIR/bin:$PATH"
 ENV PYTHONPATH="$CONDA_DIR/lib/python3.12/site-packages:$PYTHONPATH"
-ENV LD_LIBRARY_PATH=/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH="$CONDA_DIR/lib:/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH}"
 ENV CONDA_OVERRIDE_CUDA=13.0
 ENV CONDA_ALWAYS_YES=true
 ENV CUDA_VISIBLE_DEVICES=0
