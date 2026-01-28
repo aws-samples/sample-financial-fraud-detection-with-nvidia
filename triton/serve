@@ -26,7 +26,6 @@ tritonserver \
   --http-port=8000 \
   --grpc-port=8001 \
   --metrics-port=8002 \
-  --backend-config=python,python-runtime=/opt/miniconda/bin/python \
   --log-verbose=1 &
 
 TRITON_PID=$!
@@ -46,8 +45,7 @@ for i in {1..120}; do
 done
 
 # Start nginx (proxies /ping and /invocations for SageMaker)
-echo "Starting nginx proxy on port
-58080..."
+echo "Starting nginx proxy on port 8080..."
 nginx -c /opt/nginx.conf
 
 # Keep container running by waiting on Triton
