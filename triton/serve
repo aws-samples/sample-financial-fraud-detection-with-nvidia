@@ -21,7 +21,7 @@ fi
 
 # Start nginx in background (proxies /ping and /invocations for SageMaker)
 echo "Starting nginx proxy on port 8080..."
-nginx -c /opt/nginx.conf &
+exec nginx -c /opt/nginx.conf &
 
 # Start Triton on internal port 8000
 echo "Starting Triton on port 8000..."
