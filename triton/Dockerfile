@@ -8,6 +8,7 @@ ENV CONDA_DIR=/opt/miniconda
 # Install base dependencies and clean cache
 RUN apt-get update && apt-get install -y \
     wget curl git build-essential cmake sudo \
+    cuda-compat-13 \
     # libnccl2 libnccl-dev \
     libopenblas-dev libssl-dev libtinfo-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -42,8 +43,8 @@ RUN set -eux; \
 # Set Conda Python as default
 ENV PATH="$CONDA_DIR/bin:$PATH"
 ENV PYTHONPATH="$CONDA_DIR/lib/python3.12/site-packages:$PYTHONPATH"
-ENV LD_LIBRARY_PATH="$CONDA_DIR/lib:$LD_LIBRARY_PATH"
-ENV CONDA_OVERRIDE_CUDA=12.8
+ENV LD_LIBRARY_PATH=/usr/local/cuda-13.0/compat:${LD_LIBRARY_PATH}
+ENV CONDA_OVERRIDE_CUDA=13.0
 ENV CONDA_ALWAYS_YES=true
 ENV CUDA_VISIBLE_DEVICES=0
 
