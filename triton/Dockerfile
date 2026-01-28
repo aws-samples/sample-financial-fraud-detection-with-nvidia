@@ -56,8 +56,8 @@ RUN conda install python=3.12
 #     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 RUN conda install --override-channels -c nvidia -c conda-forge \
-    pytorch=2.8.0=*cuda130* \
-    py-xgboost=3.1.1=*cuda130* \
+    pytorch=*=*cuda130* \
+    py-xgboost=*=*cuda130* \
     ncurses
 
 RUN conda install  --override-channels -c conda-forge cupy=13.4.1
