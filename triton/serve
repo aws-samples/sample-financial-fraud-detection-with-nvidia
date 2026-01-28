@@ -2,7 +2,6 @@
 set -e
 
 # SageMaker extracts model.tar.gz to /opt/ml/model/
-# The model.tar.gz structure from training contains "python_backend_model_repository" folder
 MODEL_REPO=/opt/ml/model/python_backend_model_repository
 
 echo "Starting Triton Server with model repository at $MODEL_REPO"
@@ -11,7 +10,6 @@ ls -R /opt/ml/model
 # Check if model repository exists
 if [ ! -d "$MODEL_REPO" ]; then
     echo "Error: Model repository not found at $MODEL_REPO"
-    # Fallback to /opt/ml/model if the user tarred it differently
     if [ -f "/opt/ml/model/config.pbtxt" ]; then
         MODEL_REPO=/opt/ml/model
         echo "Found config.pbtxt in /opt/ml/model, using that as repo."
@@ -21,11 +19,15 @@ if [ ! -d "$MODEL_REPO" ]; then
     fi
 fi
 
-# Start Triton
-# SageMaker expects response on port 8080 (HTTP)
+# Start nginx in background (proxies /ping and /invocations for SageMaker)
+echo "Starting nginx proxy on port 8080..."
+nginx -c /opt/nginx.conf &
+
+# Start Triton on internal port 8000
+echo "Starting Triton on port 8000..."
 exec tritonserver \
   --model-repository=$MODEL_REPO \
-  --http-port=8080 \
-  --grpc-port=8081 \
-  --metrics-port=8082 \
+  --http-port=8000 \
+  --grpc-port=8001 \
+  --metrics-port=8002 \
   --log-verbose=1

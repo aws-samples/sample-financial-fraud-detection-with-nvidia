@@ -7,9 +7,8 @@ ENV CONDA_DIR=/opt/miniconda
 
 # Install base dependencies and clean cache
 RUN apt-get update && apt-get install -y \
-    wget curl git build-essential cmake sudo \
+    wget curl git build-essential cmake sudo nginx \
     cuda-compat-13-0 \
-    # libnccl2 libnccl-dev \
     libopenblas-dev libssl-dev libtinfo-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -34,7 +33,6 @@ RUN set -eux; \
     rm miniconda.sh; \
     conda config --set subdir "$CONDA_SUBDIR"; \
     conda config --set always_yes true; \
-    # Accept TOS
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main; \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r; \
     conda update -n base -c defaults conda
@@ -50,25 +48,17 @@ ENV CUDA_VISIBLE_DEVICES=0
 
 RUN conda install python=3.12
 
-# Install GPU-enabled PyTorch and XGBoost
-
-# RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-#     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-
 RUN conda install --override-channels -c nvidia -c conda-forge \
     pytorch=*=*cuda129* \
     py-xgboost=*=*cuda129* \
     ncurses
 
 RUN conda install  --override-channels -c conda-forge cupy=13.4.1
-# Install PyTorch Geometric and Captum for CUDA 12.6 + torch 2.7.0
+# Install PyTorch Geometric and Captum for CUDA 12.9 + torch 2.9.0
 RUN $CONDA_DIR/bin/pip install \
     torch-geometric \
     captum==0.7 \
     --extra-index-url https://data.pyg.org/whl/torch-2.9.0+cu129.html
-
-# RUN conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-#     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 RUN conda install -y --override-channels -c rapidsai -c nvidia -c conda-forge cudf=25.04 python=3.12
 
@@ -78,8 +68,11 @@ RUN python -c "import xgboost; print('XGBoost:', xgboost.__version__)"
 RUN python -c "import captum; print('Captum:', captum.__version__)"
 RUN python -c "import torch_geometric; print('PyG:', torch_geometric.__version__)"
 
-# Entrypoint remains unchanged from Triton base image
+# nginx config for SageMaker /ping and /invocations proxy
+COPY nginx.conf /opt/nginx.conf
 COPY serve /usr/local/bin/serve
 RUN chmod +x /usr/local/bin/serve
+
+EXPOSE 8080
 
 ENV SAGEMAKER_PROGRAM serve
