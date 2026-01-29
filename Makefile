@@ -5,7 +5,7 @@
 SHELL := /bin/bash
 .PHONY: help install info test test-benchmark test-real \
 	cdk-synth cdk-deploy cdk-deploy-all cdk-diff cdk-destroy cdk-list \
-	pipeline deploy register \
+	pipeline run-pipeline pipeline-status deploy register \
 	build-triton build-training build-preprocessing build-all \
 	logs clean-endpoints
 
@@ -17,6 +17,7 @@ AWS_REGION ?= us-east-1
 MODEL_PACKAGE_GROUP ?= fraud-detection-models
 ENDPOINT_NAME ?= fraud-detection-endpoint
 INSTANCE_TYPE ?= ml.g6e.xlarge
+PIPELINE_NAME ?= FraudDetectionPipeline
 
 # CloudFormation stack names
 INFRA_STACK := SageMakerInfraStack
@@ -64,6 +65,8 @@ help:
 	@echo ""
 	@echo "SageMaker Pipeline:"
 	@echo "  make pipeline          - Create/update the SageMaker pipeline"
+	@echo "  make run-pipeline      - Start a new pipeline execution"
+	@echo "  make pipeline-status   - Check status of latest pipeline execution"
 	@echo ""
 	@echo "Model Deployment:"
 	@echo "  make deploy            - Deploy endpoint (latest approved model)"
@@ -158,6 +161,27 @@ pipeline:
 		--region $(AWS_REGION) \
 		--profile $(AWS_PROFILE) \
 		pipeline
+
+run-pipeline:
+	@echo "Starting pipeline execution..."
+	@aws sagemaker start-pipeline-execution \
+		--pipeline-name $(PIPELINE_NAME) \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE)
+	@echo ""
+	@echo "Pipeline started. Run 'make pipeline-status' to check progress."
+
+pipeline-status:
+	@echo "Latest pipeline execution:"
+	@aws sagemaker list-pipeline-executions \
+		--pipeline-name $(PIPELINE_NAME) \
+		--max-results 1 \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		--query 'PipelineExecutionSummaries[0].{Status:PipelineExecutionStatus,Started:StartTime,Arn:PipelineExecutionArn}' \
+		--output table
+	@echo ""
+	@echo "View in console: https://$(AWS_REGION).console.aws.amazon.com/sagemaker/home?region=$(AWS_REGION)#/pipelines/$(PIPELINE_NAME)"
 
 deploy:
 	@echo "Deploying endpoint $(ENDPOINT_NAME) on $(INSTANCE_TYPE)..."
