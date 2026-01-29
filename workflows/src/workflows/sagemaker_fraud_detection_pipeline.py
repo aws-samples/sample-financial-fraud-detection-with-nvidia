@@ -86,12 +86,32 @@ def register_model(
             "SupportedContentTypes": ["application/json"],
             "SupportedResponseMIMETypes": ["application/json"],
             "SupportedRealtimeInferenceInstanceTypes": [
+                # G4dn - NVIDIA T4 (16GB)
                 "ml.g4dn.xlarge",
                 "ml.g4dn.2xlarge",
+                "ml.g4dn.4xlarge",
+                "ml.g4dn.8xlarge",
+                "ml.g4dn.16xlarge",
+                # G5 - NVIDIA A10G (24GB)
                 "ml.g5.xlarge",
                 "ml.g5.2xlarge",
+                "ml.g5.4xlarge",
+                "ml.g5.8xlarge",
+                "ml.g5.16xlarge",
+                # G6 - NVIDIA L4 (24GB)
+                "ml.g6.xlarge",
+                "ml.g6.2xlarge",
+                "ml.g6.4xlarge",
+                "ml.g6.8xlarge",
+                "ml.g6.16xlarge",
+                # G6e - NVIDIA L40S (48GB)
                 "ml.g6e.xlarge",
                 "ml.g6e.2xlarge",
+                "ml.g6e.4xlarge",
+                "ml.g6e.8xlarge",
+                "ml.g6e.16xlarge",
+                # P3 - NVIDIA V100 (16GB)
+                "ml.p3.2xlarge",
             ],
         },
         ModelApprovalStatus=approval_status,
@@ -371,12 +391,32 @@ def get_pipeline(
             content_types=["application/json"],
             response_types=["application/json"],
             inference_instances=[
+                # G4dn - NVIDIA T4 (16GB) - Turing architecture
                 "ml.g4dn.xlarge",
                 "ml.g4dn.2xlarge",
+                "ml.g4dn.4xlarge",
+                "ml.g4dn.8xlarge",
+                "ml.g4dn.16xlarge",
+                # G5 - NVIDIA A10G (24GB) - Ampere architecture
                 "ml.g5.xlarge",
                 "ml.g5.2xlarge",
+                "ml.g5.4xlarge",
+                "ml.g5.8xlarge",
+                "ml.g5.16xlarge",
+                # G6 - NVIDIA L4 (24GB) - Ada Lovelace architecture
+                "ml.g6.xlarge",
+                "ml.g6.2xlarge",
+                "ml.g6.4xlarge",
+                "ml.g6.8xlarge",
+                "ml.g6.16xlarge",
+                # G6e - NVIDIA L40S (48GB) - Ada Lovelace architecture
                 "ml.g6e.xlarge",
                 "ml.g6e.2xlarge",
+                "ml.g6e.4xlarge",
+                "ml.g6e.8xlarge",
+                "ml.g6e.16xlarge",
+                # P3 - NVIDIA V100 (16GB) - Volta architecture
+                "ml.p3.2xlarge",
             ],
             approval_status="PendingManualApproval",
         ),

@@ -16,7 +16,7 @@ AWS_PROFILE ?= zjacobso+nvidia-Admin
 AWS_REGION ?= us-east-1
 MODEL_PACKAGE_GROUP ?= fraud-detection-models
 ENDPOINT_NAME ?= fraud-detection-endpoint
-INSTANCE_TYPE ?= ml.g4dn.2xlarge
+INSTANCE_TYPE ?= ml.g6e.xlarge
 
 # CloudFormation stack names
 INFRA_STACK := SageMakerInfraStack
