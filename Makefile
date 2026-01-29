@@ -274,3 +274,12 @@ test-benchmark:
 		--region $(AWS_REGION) \
 		--profile $(AWS_PROFILE) \
 		--benchmark
+
+test-real:
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.test_endpoint \
+		--endpoint-name $(ENDPOINT_NAME) \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		--use-real-data \
+		--bucket $(BUCKET) \
+		--max-transactions 1000
