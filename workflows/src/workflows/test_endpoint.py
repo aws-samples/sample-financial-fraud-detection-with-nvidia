@@ -58,11 +58,10 @@ import boto3
 import numpy as np
 import pandas as pd
 
-
 # Feature dimensions from the TabFormer dataset preprocessing
-USER_FEATURE_DIM = 13       # Binary-encoded card ID
-MERCHANT_FEATURE_DIM = 24   # Merchant name + MCC (binary encoded)
-EDGE_FEATURE_DIM = 38       # Transaction attributes (Amount, Error, Chip, City, Zip, MCC)
+USER_FEATURE_DIM = 13  # Binary-encoded card ID
+MERCHANT_FEATURE_DIM = 24  # Merchant name + MCC (binary encoded)
+EDGE_FEATURE_DIM = 38  # Transaction attributes (Amount, Error, Chip, City, Zip, MCC)
 
 # S3 paths for preprocessed test data
 TEST_DATA_PREFIX = "data/processed/gnn/test_gnn"
@@ -82,6 +81,7 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
     Returns:
         dict with keys matching the model's expected inputs, plus ground truth labels
     """
+
     def read_csv(key):
         response = s3_client.get_object(Bucket=bucket, Key=key)
         return pd.read_csv(io.BytesIO(response["Body"].read()))
@@ -89,7 +89,11 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
     def read_mask(key):
         try:
             response = s3_client.get_object(Bucket=bucket, Key=key)
-            return pd.read_csv(io.BytesIO(response["Body"].read()), header=None).values.ravel().astype(np.int32)
+            return (
+                pd.read_csv(io.BytesIO(response["Body"].read()), header=None)
+                .values.ravel()
+                .astype(np.int32)
+            )
         except s3_client.exceptions.NoSuchKey:
             return None
 
@@ -150,9 +154,15 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
         "edge_index_user_to_merchant": edge_index_df.values.T.astype(np.int64),
         "edge_attr_user_to_merchant": edge_attr_df.values.astype(np.float32),
         "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
-        "feature_mask_user": user_mask if user_mask is not None else np.zeros(user_df.shape[1], dtype=np.int32),
-        "feature_mask_merchant": merchant_mask if merchant_mask is not None else np.zeros(merchant_df.shape[1], dtype=np.int32),
-        "edge_feature_mask_user_to_merchant": edge_mask if edge_mask is not None else np.zeros(edge_attr_df.shape[1], dtype=np.int32),
+        "feature_mask_user": user_mask
+        if user_mask is not None
+        else np.zeros(user_df.shape[1], dtype=np.int32),
+        "feature_mask_merchant": merchant_mask
+        if merchant_mask is not None
+        else np.zeros(merchant_df.shape[1], dtype=np.int32),
+        "edge_feature_mask_user_to_merchant": edge_mask
+        if edge_mask is not None
+        else np.zeros(edge_attr_df.shape[1], dtype=np.int32),
     }
 
     # Ground truth labels (for evaluation)
@@ -182,23 +192,29 @@ def make_test_data(num_merchants=5, num_users=7, num_transactions=3):
     return {
         # Node features
         "x_user": np.random.randn(num_users, USER_FEATURE_DIM).astype(np.float32),
-        "x_merchant": np.random.randn(num_merchants, MERCHANT_FEATURE_DIM).astype(np.float32),
-
+        "x_merchant": np.random.randn(num_merchants, MERCHANT_FEATURE_DIM).astype(
+            np.float32
+        ),
         # Graph structure: which user transacted with which merchant
         # Row 0 = user indices, Row 1 = merchant indices
-        "edge_index_user_to_merchant": np.array([
-            np.random.randint(0, num_users, num_transactions),
-            np.random.randint(0, num_merchants, num_transactions)
-        ], dtype=np.int64),
-
+        "edge_index_user_to_merchant": np.array(
+            [
+                np.random.randint(0, num_users, num_transactions),
+                np.random.randint(0, num_merchants, num_transactions),
+            ],
+            dtype=np.int64,
+        ),
         # Transaction features (amount, location, payment method, etc.)
-        "edge_attr_user_to_merchant": np.random.randn(num_transactions, EDGE_FEATURE_DIM).astype(np.float32),
-
+        "edge_attr_user_to_merchant": np.random.randn(
+            num_transactions, EDGE_FEATURE_DIM
+        ).astype(np.float32),
         # Shapley computation settings
         "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
         "feature_mask_user": np.zeros(USER_FEATURE_DIM, dtype=np.int32),
         "feature_mask_merchant": np.zeros(MERCHANT_FEATURE_DIM, dtype=np.int32),
-        "edge_feature_mask_user_to_merchant": np.zeros(EDGE_FEATURE_DIM, dtype=np.int32),
+        "edge_feature_mask_user_to_merchant": np.zeros(
+            EDGE_FEATURE_DIM, dtype=np.int32
+        ),
     }
 
 
@@ -229,11 +245,13 @@ def invoke_endpoint(runtime, endpoint_name, data, compute_shap=False):
 
     outputs = [{"name": "PREDICTION"}]
     if compute_shap:
-        outputs.extend([
-            {"name": "shap_values_merchant"},
-            {"name": "shap_values_user"},
-            {"name": "shap_values_user_to_merchant"},
-        ])
+        outputs.extend(
+            [
+                {"name": "shap_values_merchant"},
+                {"name": "shap_values_user"},
+                {"name": "shap_values_user_to_merchant"},
+            ]
+        )
 
     response = runtime.invoke_endpoint(
         EndpointName=endpoint_name,
@@ -292,10 +310,10 @@ def compute_metrics(y_true, y_pred, threshold=0.5):
     """Compute classification metrics."""
     from sklearn.metrics import (
         accuracy_score,
+        confusion_matrix,
+        f1_score,
         precision_score,
         recall_score,
-        f1_score,
-        confusion_matrix,
     )
 
     y_pred_binary = (y_pred > threshold).astype(int)
@@ -322,8 +340,8 @@ def print_metrics(metrics, threshold):
     print("\n  Confusion Matrix:")
     print("                      Predicted")
     print("                   Non-Fraud  Fraud")
-    print(f"  Actual Non-Fraud   {cm[0,0]:>7}  {cm[0,1]:>6}")
-    print(f"         Fraud       {cm[1,0]:>7}  {cm[1,1]:>6}")
+    print(f"  Actual Non-Fraud   {cm[0, 0]:>7}  {cm[0, 1]:>6}")
+    print(f"         Fraud       {cm[1, 0]:>7}  {cm[1, 1]:>6}")
     print("  " + "-" * 50)
 
 
@@ -362,7 +380,9 @@ def test_inference(runtime, endpoint_name):
         print("\n  Graph Structure:")
         print(f"    Users (card holders): {data['x_user'].shape[0]}")
         print(f"    Merchants: {data['x_merchant'].shape[0]}")
-        print(f"    Transactions to evaluate: {data['edge_attr_user_to_merchant'].shape[0]}")
+        print(
+            f"    Transactions to evaluate: {data['edge_attr_user_to_merchant'].shape[0]}"
+        )
 
         response = invoke_endpoint(runtime, endpoint_name, data, compute_shap=False)
         result = parse_response(response)
@@ -380,14 +400,18 @@ def test_inference(runtime, endpoint_name):
         return False
 
 
-def test_real_data(runtime, s3_client, endpoint_name, bucket, threshold, max_transactions=1000):
+def test_real_data(
+    runtime, s3_client, endpoint_name, bucket, threshold, max_transactions=1000
+):
     """Test inference with real preprocessed data from S3 and evaluate metrics."""
     print(f"\n{'=' * 60}")
     print("Test: Real Data Evaluation")
     print("=" * 60)
 
     try:
-        data, labels = load_test_data_from_s3(s3_client, bucket, max_transactions=max_transactions)
+        data, labels = load_test_data_from_s3(
+            s3_client, bucket, max_transactions=max_transactions
+        )
 
         print("\n  Running inference on real test data...")
         start = time.time()
@@ -401,7 +425,7 @@ def test_real_data(runtime, s3_client, endpoint_name, bucket, threshold, max_tra
             print("  Result: FAILED - No PREDICTION in response")
             return False
 
-        print(f"  Inference time: {elapsed:.2f}s ({len(labels)/elapsed:.0f} tx/sec)")
+        print(f"  Inference time: {elapsed:.2f}s ({len(labels) / elapsed:.0f} tx/sec)")
 
         # Compute and display metrics
         metrics = compute_metrics(labels, predictions.flatten(), threshold)
@@ -429,6 +453,7 @@ def test_real_data(runtime, s3_client, endpoint_name, bucket, threshold, max_tra
     except Exception as e:
         print(f"  Result: FAILED - {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -454,7 +479,9 @@ def test_shapley(runtime, endpoint_name):
                 print(f"    {name}: {format_prediction(prob)} (raw: {prob:.4f})")
             elif name.startswith("shap_values_"):
                 total_contribution = np.sum(arr)
-                print(f"    {name}: {arr.shape} -> total contribution: {total_contribution:.4f}")
+                print(
+                    f"    {name}: {arr.shape} -> total contribution: {total_contribution:.4f}"
+                )
 
         print("\n  Note: Shapley computation is expensive. In production,")
         print("  only request explanations for flagged transactions.")
@@ -509,22 +536,44 @@ Examples:
   %(prog)s --threshold 0.3                    # Adjust fraud decision threshold
 """,
     )
-    parser.add_argument("--endpoint-name", default="fraud-detection-endpoint",
-                        help="SageMaker endpoint name")
+    parser.add_argument(
+        "--endpoint-name",
+        default="fraud-detection-endpoint",
+        help="SageMaker endpoint name",
+    )
     parser.add_argument("--region", default="us-east-1", help="AWS region")
     parser.add_argument("--profile", default=None, help="AWS profile name")
-    parser.add_argument("--bucket", default=None,
-                        help="S3 bucket with test data (auto-detected if not specified)")
-    parser.add_argument("--use-real-data", action="store_true",
-                        help="Use real preprocessed test data from S3")
-    parser.add_argument("--max-transactions", type=int, default=1000,
-                        help="Max transactions to evaluate (default: 1000)")
-    parser.add_argument("--benchmark", action="store_true",
-                        help="Run latency benchmark")
-    parser.add_argument("--benchmark-requests", type=int, default=10,
-                        help="Number of benchmark requests")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                        help="Fraud decision threshold (default: 0.5)")
+    parser.add_argument(
+        "--bucket",
+        default=None,
+        help="S3 bucket with test data (auto-detected if not specified)",
+    )
+    parser.add_argument(
+        "--use-real-data",
+        action="store_true",
+        help="Use real preprocessed test data from S3",
+    )
+    parser.add_argument(
+        "--max-transactions",
+        type=int,
+        default=1000,
+        help="Max transactions to evaluate (default: 1000)",
+    )
+    parser.add_argument(
+        "--benchmark", action="store_true", help="Run latency benchmark"
+    )
+    parser.add_argument(
+        "--benchmark-requests",
+        type=int,
+        default=10,
+        help="Number of benchmark requests",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Fraud decision threshold (default: 0.5)",
+    )
     args = parser.parse_args()
 
     # Setup AWS clients
@@ -543,7 +592,10 @@ Examples:
         try:
             cf_client = session.client("cloudformation")
             response = cf_client.describe_stacks(StackName="SageMakerInfraStack")
-            outputs = {o["OutputKey"]: o["OutputValue"] for o in response["Stacks"][0]["Outputs"]}
+            outputs = {
+                o["OutputKey"]: o["OutputValue"]
+                for o in response["Stacks"][0]["Outputs"]
+            }
             bucket = outputs.get("BucketName")
         except Exception:
             # Fallback to convention-based name
@@ -570,16 +622,36 @@ Examples:
 
     if results[-1][1]:  # Only continue if health check passed
         if args.use_real_data:
-            results.append(("Real Data Evaluation",
-                          test_real_data(runtime, s3_client, args.endpoint_name,
-                                        bucket, args.threshold, args.max_transactions)))
+            results.append(
+                (
+                    "Real Data Evaluation",
+                    test_real_data(
+                        runtime,
+                        s3_client,
+                        args.endpoint_name,
+                        bucket,
+                        args.threshold,
+                        args.max_transactions,
+                    ),
+                )
+            )
         else:
-            results.append(("Basic Inference", test_inference(runtime, args.endpoint_name)))
-            results.append(("Shapley Values", test_shapley(runtime, args.endpoint_name)))
+            results.append(
+                ("Basic Inference", test_inference(runtime, args.endpoint_name))
+            )
+            results.append(
+                ("Shapley Values", test_shapley(runtime, args.endpoint_name))
+            )
 
         if args.benchmark:
-            results.append(("Latency Benchmark",
-                          test_benchmark(runtime, args.endpoint_name, args.benchmark_requests)))
+            results.append(
+                (
+                    "Latency Benchmark",
+                    test_benchmark(
+                        runtime, args.endpoint_name, args.benchmark_requests
+                    ),
+                )
+            )
 
     # Summary
     print(f"\n{'=' * 60}")
