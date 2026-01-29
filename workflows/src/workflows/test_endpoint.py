@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Fraud Detection Endpoint Test Script
 
@@ -53,11 +52,10 @@ import time
 import boto3
 import numpy as np
 
-
 # Feature dimensions from the TabFormer dataset preprocessing
-USER_FEATURE_DIM = 13       # Binary-encoded card ID
-MERCHANT_FEATURE_DIM = 24   # Merchant name + MCC (binary encoded)
-EDGE_FEATURE_DIM = 38       # Transaction attributes (Amount, Error, Chip, City, Zip, MCC)
+USER_FEATURE_DIM = 13  # Binary-encoded card ID
+MERCHANT_FEATURE_DIM = 24  # Merchant name + MCC (binary encoded)
+EDGE_FEATURE_DIM = 38  # Transaction attributes (Amount, Error, Chip, City, Zip, MCC)
 
 
 def make_test_data(num_merchants=5, num_users=7, num_transactions=3):
@@ -76,23 +74,29 @@ def make_test_data(num_merchants=5, num_users=7, num_transactions=3):
     return {
         # Node features
         "x_user": np.random.randn(num_users, USER_FEATURE_DIM).astype(np.float32),
-        "x_merchant": np.random.randn(num_merchants, MERCHANT_FEATURE_DIM).astype(np.float32),
-
+        "x_merchant": np.random.randn(num_merchants, MERCHANT_FEATURE_DIM).astype(
+            np.float32
+        ),
         # Graph structure: which user transacted with which merchant
         # Row 0 = user indices, Row 1 = merchant indices
-        "edge_index_user_to_merchant": np.array([
-            np.random.randint(0, num_users, num_transactions),
-            np.random.randint(0, num_merchants, num_transactions)
-        ], dtype=np.int64),
-
+        "edge_index_user_to_merchant": np.array(
+            [
+                np.random.randint(0, num_users, num_transactions),
+                np.random.randint(0, num_merchants, num_transactions),
+            ],
+            dtype=np.int64,
+        ),
         # Transaction features (amount, location, payment method, etc.)
-        "edge_attr_user_to_merchant": np.random.randn(num_transactions, EDGE_FEATURE_DIM).astype(np.float32),
-
+        "edge_attr_user_to_merchant": np.random.randn(
+            num_transactions, EDGE_FEATURE_DIM
+        ).astype(np.float32),
         # Shapley computation settings
         "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
         "feature_mask_user": np.zeros(USER_FEATURE_DIM, dtype=np.int32),
         "feature_mask_merchant": np.zeros(MERCHANT_FEATURE_DIM, dtype=np.int32),
-        "edge_feature_mask_user_to_merchant": np.zeros(EDGE_FEATURE_DIM, dtype=np.int32),
+        "edge_feature_mask_user_to_merchant": np.zeros(
+            EDGE_FEATURE_DIM, dtype=np.int32
+        ),
     }
 
 
@@ -123,11 +127,13 @@ def invoke_endpoint(runtime, endpoint_name, data, compute_shap=False):
 
     outputs = [{"name": "PREDICTION"}]
     if compute_shap:
-        outputs.extend([
-            {"name": "shap_values_merchant"},
-            {"name": "shap_values_user"},
-            {"name": "shap_values_user_to_merchant"},
-        ])
+        outputs.extend(
+            [
+                {"name": "shap_values_merchant"},
+                {"name": "shap_values_user"},
+                {"name": "shap_values_user_to_merchant"},
+            ]
+        )
 
     response = runtime.invoke_endpoint(
         EndpointName=endpoint_name,
@@ -149,7 +155,7 @@ def format_prediction(prob, threshold=0.5):
     """Format a single prediction as human-readable text."""
     label = "FRAUD" if prob > threshold else "LEGIT"
     confidence = prob if prob > threshold else (1 - prob)
-    return f"{label} ({confidence*100:.1f}% confidence)"
+    return f"{label} ({confidence * 100:.1f}% confidence)"
 
 
 def print_predictions(predictions, edge_index, threshold=0.5):
@@ -166,7 +172,7 @@ def print_predictions(predictions, edge_index, threshold=0.5):
         num_fraud += is_fraud
 
         indicator = "X" if is_fraud else " "
-        print(f"  [{indicator}] Tx {i+1}: User {user_id} -> Merchant {merchant_id}")
+        print(f"  [{indicator}] Tx {i + 1}: User {user_id} -> Merchant {merchant_id}")
         print(f"       Prediction: {result} (raw: {prob:.4f})")
 
     print("  " + "-" * 50)
@@ -175,9 +181,9 @@ def print_predictions(predictions, edge_index, threshold=0.5):
 
 def test_health(sm_client, endpoint_name):
     """Check endpoint health."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Test 1: Endpoint Health Check")
-    print('='*60)
+    print("=" * 60)
 
     try:
         info = sm_client.describe_endpoint(EndpointName=endpoint_name)
@@ -198,9 +204,9 @@ def test_health(sm_client, endpoint_name):
 
 def test_inference(runtime, endpoint_name):
     """Test basic inference with human-readable output."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Test 2: Basic Inference")
-    print('='*60)
+    print("=" * 60)
 
     try:
         data = make_test_data(num_merchants=3, num_users=4, num_transactions=5)
@@ -208,7 +214,9 @@ def test_inference(runtime, endpoint_name):
         print("\n  Graph Structure:")
         print(f"    Users (card holders): {data['x_user'].shape[0]}")
         print(f"    Merchants: {data['x_merchant'].shape[0]}")
-        print(f"    Transactions to evaluate: {data['edge_attr_user_to_merchant'].shape[0]}")
+        print(
+            f"    Transactions to evaluate: {data['edge_attr_user_to_merchant'].shape[0]}"
+        )
 
         response = invoke_endpoint(runtime, endpoint_name, data, compute_shap=False)
         result = parse_response(response)
@@ -228,9 +236,9 @@ def test_inference(runtime, endpoint_name):
 
 def test_shapley(runtime, endpoint_name):
     """Test inference with Shapley value explanations."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Test 3: Explainability (Shapley Values)")
-    print('='*60)
+    print("=" * 60)
 
     print("\n  Shapley values explain which features contributed to the")
     print("  fraud prediction. Higher absolute values = more influence.")
@@ -249,7 +257,9 @@ def test_shapley(runtime, endpoint_name):
                 feature_type = name.replace("shap_values_", "")
                 # Shapley values are aggregated per feature group
                 total_contribution = np.sum(arr)
-                print(f"    {name}: {arr.shape} -> total contribution: {total_contribution:.4f}")
+                print(
+                    f"    {name}: {arr.shape} -> total contribution: {total_contribution:.4f}"
+                )
 
         print("\n  Note: Shapley computation is expensive. In production,")
         print("  only request explanations for flagged transactions.")
@@ -262,9 +272,9 @@ def test_shapley(runtime, endpoint_name):
 
 def test_benchmark(runtime, endpoint_name, num_requests=10):
     """Benchmark inference latency."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Test 4: Latency Benchmark ({num_requests} requests)")
-    print('='*60)
+    print("=" * 60)
 
     try:
         data = make_test_data()
@@ -275,7 +285,7 @@ def test_benchmark(runtime, endpoint_name, num_requests=10):
             start = time.time()
             invoke_endpoint(runtime, endpoint_name, data, compute_shap=False)
             latencies.append((time.time() - start) * 1000)
-            print(f"    Request {i+1}/{num_requests}: {latencies[-1]:.0f} ms")
+            print(f"    Request {i + 1}/{num_requests}: {latencies[-1]:.0f} ms")
 
         print(f"\n  Latency Statistics:")
         print(f"    Mean:  {np.mean(latencies):>6.0f} ms")
@@ -301,18 +311,30 @@ Examples:
   %(prog)s --benchmark                        # Include latency benchmark
   %(prog)s --endpoint-name my-endpoint-v2     # Test specific endpoint
   %(prog)s --profile my-aws-profile           # Use specific AWS profile
-"""
+""",
     )
-    parser.add_argument("--endpoint-name", default="fraud-detection-endpoint",
-                        help="SageMaker endpoint name")
+    parser.add_argument(
+        "--endpoint-name",
+        default="fraud-detection-endpoint",
+        help="SageMaker endpoint name",
+    )
     parser.add_argument("--region", default="us-east-1", help="AWS region")
     parser.add_argument("--profile", default=None, help="AWS profile name")
-    parser.add_argument("--benchmark", action="store_true",
-                        help="Run latency benchmark")
-    parser.add_argument("--benchmark-requests", type=int, default=10,
-                        help="Number of benchmark requests")
-    parser.add_argument("--threshold", type=float, default=0.5,
-                        help="Fraud decision threshold (default: 0.5)")
+    parser.add_argument(
+        "--benchmark", action="store_true", help="Run latency benchmark"
+    )
+    parser.add_argument(
+        "--benchmark-requests",
+        type=int,
+        default=10,
+        help="Number of benchmark requests",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Fraud decision threshold (default: 0.5)",
+    )
     args = parser.parse_args()
 
     # Setup AWS clients
@@ -324,9 +346,9 @@ Examples:
     sm_client = session.client("sagemaker")
     runtime = session.client("sagemaker-runtime")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Fraud Detection Endpoint Test Suite")
-    print("="*60)
+    print("=" * 60)
     print(f"\nEndpoint: {args.endpoint_name}")
     print(f"Region:   {args.region}")
     print(f"Profile:  {args.profile or 'default'}")
@@ -343,13 +365,19 @@ Examples:
         results.append(("Shapley Values", test_shapley(runtime, args.endpoint_name)))
 
         if args.benchmark:
-            results.append(("Latency Benchmark",
-                          test_benchmark(runtime, args.endpoint_name, args.benchmark_requests)))
+            results.append(
+                (
+                    "Latency Benchmark",
+                    test_benchmark(
+                        runtime, args.endpoint_name, args.benchmark_requests
+                    ),
+                )
+            )
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Test Summary")
-    print("="*60)
+    print("=" * 60)
 
     passed = sum(1 for _, r in results if r)
     total = len(results)
@@ -359,7 +387,7 @@ Examples:
         print(f"  {name}: {status}")
 
     print(f"\n  Total: {passed}/{total} tests passed")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
     return 0 if passed == total else 1
 
