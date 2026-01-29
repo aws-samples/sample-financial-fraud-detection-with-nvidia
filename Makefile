@@ -282,4 +282,4 @@ test-real:
 		--profile $(AWS_PROFILE) \
 		--use-real-data \
 		--bucket $(BUCKET) \
-		--max-transactions 1000
+		--max-transactions 2500
