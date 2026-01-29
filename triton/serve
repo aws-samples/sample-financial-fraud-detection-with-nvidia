@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+nvidia-smi --version
+
 # SageMaker extracts model.tar.gz to /opt/ml/model/
 MODEL_REPO=/opt/ml/model/python_backend_model_repository
 
