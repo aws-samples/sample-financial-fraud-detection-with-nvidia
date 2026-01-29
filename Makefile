@@ -3,7 +3,7 @@
 # Wraps CDK infrastructure, SageMaker pipelines, and image builds
 
 SHELL := /bin/bash
-.PHONY: help install info \
+.PHONY: help install info test test-benchmark \
 	cdk-synth cdk-deploy cdk-deploy-all cdk-diff cdk-destroy cdk-list \
 	pipeline deploy register \
 	build-triton build-training build-preprocessing build-all \
@@ -79,6 +79,10 @@ help:
 	@echo "Utilities:"
 	@echo "  make logs              - Fetch latest endpoint logs"
 	@echo "  make clean-endpoints   - Delete all endpoint configs"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test              - Run endpoint smoke tests"
+	@echo "  make test-benchmark    - Run tests with latency benchmark"
 	@echo ""
 	@echo "Current Config: AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION)"
 
@@ -254,3 +258,19 @@ clean-endpoints:
 			--profile $(AWS_PROFILE) \
 			--region $(AWS_REGION) 2>/dev/null || true
 	@echo "Done."
+
+# =============================================================================
+# Testing
+# =============================================================================
+test:
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.test_endpoint \
+		--endpoint-name $(ENDPOINT_NAME) \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE)
+
+test-benchmark:
+	@cd $(WORKFLOWS_DIR) && uv run python -m workflows.test_endpoint \
+		--endpoint-name $(ENDPOINT_NAME) \
+		--region $(AWS_REGION) \
+		--profile $(AWS_PROFILE) \
+		--benchmark

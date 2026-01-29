@@ -96,7 +96,7 @@ make deploy     # Deploy endpoint with defaults
 To customize the deployment:
 
 ```bash
-make deploy ENDPOINT_NAME=fraud-prod INSTANCE_TYPE=ml.g5.xlarge
+make deploy ENDPOINT_NAME=fraud-prod INSTANCE_TYPE=ml.g5e.2xlarge
 ```
 
 The endpoint runs NVIDIA Triton and accepts merchant features, cardholder features, and graph structure as inputs. It returns fraud probability plus Shapley values for explainability.
