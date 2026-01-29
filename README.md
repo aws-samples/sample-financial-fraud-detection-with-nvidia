@@ -20,9 +20,17 @@ When you trigger a pipeline run, three stages execute in sequence.
 
 ## Getting Started
 
-You'll need an AWS account with permissions for SageMaker, ECR, S3, IAM, CloudFormation, CodeBuild, and Secrets Manager. Locally you'll need Docker, Node.js 20+, Python 3.12+, AWS CLI v2, and `uv` for Python package management. The full deployment takes about 30 minutes.
+You'll need an AWS account with permissions for SageMaker, ECR, S3, IAM, CloudFormation, CodeBuild, and Secrets Manager. Locally you'll need Docker, Node.js 20+, Python 3.12+, AWS CLI v2, and `uv` for Python package management.
 
-First, store your NVIDIA NGC API key. The infrastructure pulls base images from NVIDIA GPU Cloud:
+### Prerequisites
+
+Install dependencies:
+
+```bash
+make install
+```
+
+Store your NVIDIA NGC API key (required to pull base images from NVIDIA GPU Cloud):
 
 ```bash
 aws secretsmanager create-secret \
@@ -31,75 +39,124 @@ aws secretsmanager create-secret \
   --profile <your-aws-profile>
 ```
 
-Install dependencies and deploy:
+Bootstrap CDK (first time only):
 
 ```bash
-make install
-
-# Bootstrap CDK (first time only)
 cd infra && npx cdk bootstrap aws://<ACCOUNT>/<REGION> --profile <your-aws-profile>
-
-# Deploy everything
-make cdk-deploy-all
 ```
 
-This creates S3 buckets for data and models, ECR repositories for custom containers, SageMaker execution roles, a SageMaker Domain for Studio access, and CodeBuild projects that automatically build container images.
+### Deployment (Multi-Stage)
 
-Wait for the container images to finish building. This takes 15-20 minutes:
+The CDK deploys multiple stacks with dependencies. Due to async CodeBuild image builds and the endpoint stack requiring a trained model, you cannot deploy everything in one shot. Follow this sequence:
+
+**Stage 1: Deploy Infrastructure (without endpoint)**
+
+Deploy the base infrastructure and image build pipelines. Skip the endpoint stack since no model exists yet:
 
 ```bash
-# Check build status
+cd infra
+npx cdk deploy --all \
+  --exclude SageMakerTritonEndpointStack \
+  --profile <your-aws-profile> \
+  --require-approval never
+```
+
+This creates:
+- S3 buckets for data and models
+- ECR repositories for custom containers
+- CodeBuild projects that start building images automatically
+- SageMaker execution roles
+- SageMaker Domain for Studio access
+
+**Stage 2: Wait for Container Images**
+
+CodeBuild starts image builds automatically but they take 15-20 minutes. Wait for all three to complete:
+
+```bash
+# Check Triton image build
 aws codebuild list-builds-for-project \
   --project-name triton-inference-image-build \
+  --query 'ids[0]' --output text \
+  --profile <your-aws-profile> | xargs -I {} \
+  aws codebuild batch-get-builds --ids {} \
+  --query 'builds[0].buildStatus' --output text \
+  --profile <your-aws-profile>
+
+# Check training image build
+aws codebuild list-builds-for-project \
+  --project-name sagemaker-training-image-build \
+  --query 'ids[0]' --output text \
+  --profile <your-aws-profile> | xargs -I {} \
+  aws codebuild batch-get-builds --ids {} \
+  --query 'builds[0].buildStatus' --output text \
+  --profile <your-aws-profile>
+
+# Check preprocessing image build
+aws codebuild list-builds-for-project \
+  --project-name sagemaker-preprocessing-image-build \
+  --query 'ids[0]' --output text \
+  --profile <your-aws-profile> | xargs -I {} \
+  aws codebuild batch-get-builds --ids {} \
+  --query 'builds[0].buildStatus' --output text \
   --profile <your-aws-profile>
 ```
 
-Upload the training data:
+All three should show `SUCCEEDED` before proceeding.
+
+**Stage 3: Upload Training Data**
+
+Download the TabFormer dataset and upload to S3:
 
 ```bash
+# See notebooks/extra/download.md for download instructions
 aws s3 cp card_transaction.v1.csv \
   s3://fraud-detection-<account>-sm/data/TabFormer/raw/ \
   --profile <your-aws-profile>
 ```
 
-## Running Your First Pipeline
+**Stage 4: Run the Training Pipeline**
 
-Register the pipeline with SageMaker:
+Register and execute the pipeline:
 
 ```bash
 make pipeline
-```
 
-This creates the `FraudDetectionPipeline` in SageMaker. You can execute it from Studio or the CLI.
-
-To run from Studio, go to AWS Console → SageMaker → Domains, launch Studio, click Pipelines in the sidebar, find FraudDetectionPipeline, and click Create execution. The UI shows real-time progress with logs and metrics for each step.
-
-To run from CLI:
-
-```bash
 aws sagemaker start-pipeline-execution \
   --pipeline-name FraudDetectionPipeline \
   --profile <your-aws-profile>
 ```
 
-The pipeline runs through PreprocessData (~15 minutes), TrainModel (~5 minutes), and RegisterModel (~2 minutes). SageMaker automatically provisions GPU instances, runs containers, stores artifacts, and cleans up when complete.
-
-## Deploying to an Endpoint
-
-Once training completes, the model registers in Model Registry with status `PendingManualApproval`. Approve it in the SageMaker console, then deploy:
+The pipeline takes ~25 minutes: PreprocessData (~15 min), TrainModel (~5 min), RegisterModel (~2 min). Monitor progress in SageMaker Studio or via CLI:
 
 ```bash
-make register   # Register new model package with latest Triton image
-make deploy     # Deploy endpoint with defaults
+aws sagemaker list-pipeline-executions \
+  --pipeline-name FraudDetectionPipeline \
+  --profile <your-aws-profile>
 ```
 
-To customize the deployment:
+**Stage 5: Deploy the Endpoint**
+
+Once the pipeline completes and a model is registered, you can deploy. The endpoint stack will now succeed because model.tar.gz exists:
 
 ```bash
-make deploy ENDPOINT_NAME=fraud-prod INSTANCE_TYPE=ml.g5e.2xlarge
+# Option A: Use Makefile (recommended - handles model registration)
+make register  # Register latest model with Triton image
+make deploy    # Deploy endpoint
+
+# Option B: Deploy via CDK (uses fixed model path)
+cd infra
+npx cdk deploy SageMakerTritonEndpointStack --profile <your-aws-profile>
 ```
 
-The endpoint runs NVIDIA Triton and accepts merchant features, cardholder features, and graph structure as inputs. It returns fraud probability plus Shapley values for explainability.
+### Verification
+
+Test the deployed endpoint:
+
+```bash
+make test                    # Quick smoke test
+make test-real               # Test with real data from S3
+make test-benchmark          # Include latency measurements
+```
 
 ## Quick Reference
 
@@ -112,7 +169,7 @@ make info                 # Show current configuration
 
 # Infrastructure
 make cdk-list             # List all stacks
-make cdk-deploy-all       # Deploy everything
+make cdk-deploy-all       # Deploy everything (may fail on first run - see above)
 make cdk-diff             # Preview changes
 
 # Pipeline
@@ -128,6 +185,11 @@ make build-triton         # Rebuild Triton image
 make build-training       # Rebuild training image
 make build-preprocessing  # Rebuild preprocessing image
 make build-all            # Rebuild all images
+
+# Testing
+make test                 # Run endpoint smoke tests
+make test-real            # Evaluate on real test data from S3
+make test-benchmark       # Include latency benchmark
 
 # Utilities
 make logs                 # Fetch latest endpoint logs
@@ -147,7 +209,8 @@ The `workflows/` directory contains the SageMaker pipeline definition:
 ```
 workflows/
 ├── src/workflows/
-│   └── sagemaker_fraud_detection_pipeline.py
+│   ├── sagemaker_fraud_detection_pipeline.py
+│   └── test_endpoint.py
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -197,6 +260,27 @@ SageMaker manages artifact passing between steps via S3:
 
 The model is called `prediction_and_shapley`. It takes merchant features, user features, and graph edge information as inputs. It returns fraud probability plus Shapley values that explain which features contributed most to the prediction. This explainability matters for regulatory compliance and fraud analyst workflows.
 
+## Troubleshooting
+
+**CDK deploy fails on SageMakerTritonEndpointStack**
+
+This stack requires a trained model at `s3://<bucket>/model-repository/model.tar.gz`. Skip it on first deploy with `--exclude SageMakerTritonEndpointStack`, run the training pipeline, then deploy the endpoint separately.
+
+**Pipeline fails with "image does not exist"**
+
+Container images build asynchronously. Wait for all three CodeBuild projects to complete (15-20 minutes after CDK deploy) before running the pipeline. Check status with `aws codebuild list-builds-for-project`.
+
+**Endpoint returns 413 Request Entity Too Large**
+
+The nginx proxy in Triton has a body size limit. For large inference batches, rebuild the image after updating `triton/nginx.conf` with a larger `client_max_body_size`.
+
+**Test fails with "Endpoint not InService"**
+
+Endpoint deployment takes 5-10 minutes. Check status with:
+```bash
+aws sagemaker describe-endpoint --endpoint-name fraud-detection-endpoint --profile <your-aws-profile>
+```
+
 ## What's Next
 
 The default hyperparameters work reasonably well, but you can tune them through pipeline parameters:
@@ -221,14 +305,27 @@ To use your own data, replace the `InputDataUrl` parameter with your S3 path. En
 
 ## Cleanup
 
+Delete resources in reverse dependency order:
+
 ```bash
-make cdk-destroy STACK=SageMakerTritonEndpointStack
-make cdk-destroy STACK=SageMakerDomainStack
-# Continue for other stacks, or:
-cd infra && npx cdk destroy --all --profile <your-aws-profile>
+# Delete endpoint first
+make clean-endpoints
+
+# Then destroy stacks
+cd infra
+npx cdk destroy SageMakerTritonEndpointStack --profile <your-aws-profile>
+npx cdk destroy SageMakerDomainStack --profile <your-aws-profile>
+npx cdk destroy SageMakerInfraStack --profile <your-aws-profile>
+npx cdk destroy TritonImageRepoStack --profile <your-aws-profile>
+npx cdk destroy SageMakerTrainingImageRepoStack --profile <your-aws-profile>
+npx cdk destroy SageMakerPreprocessingImageRepoStack --profile <your-aws-profile>
+npx cdk destroy NvidiaFraudDetectionBlueprint --profile <your-aws-profile>
+
+# Or destroy all at once (may require multiple runs if dependencies fail)
+npx cdk destroy --all --profile <your-aws-profile>
 ```
 
-S3 buckets are configured with auto-delete. You may need to manually delete SageMaker endpoints and model packages before destroying the infrastructure stacks.
+S3 buckets are configured with auto-delete. You may need to manually delete SageMaker model packages from the registry before destroying infrastructure stacks.
 
 ## Contributing
 
