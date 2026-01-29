@@ -3,7 +3,7 @@
 # Wraps CDK infrastructure, SageMaker pipelines, and image builds
 
 SHELL := /bin/bash
-.PHONY: help install info test test-benchmark \
+.PHONY: help install info test test-benchmark test-real \
 	cdk-synth cdk-deploy cdk-deploy-all cdk-diff cdk-destroy cdk-list \
 	pipeline deploy register \
 	build-triton build-training build-preprocessing build-all \
@@ -83,6 +83,7 @@ help:
 	@echo "Testing:"
 	@echo "  make test              - Run endpoint smoke tests"
 	@echo "  make test-benchmark    - Run tests with latency benchmark"
+	@echo "  make test-real         - Run tests with real data from the testing dataset"
 	@echo ""
 	@echo "Current Config: AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION)"
 
