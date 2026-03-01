@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-nvidia-smi --version
+nvidia-smi || echo "Warning: nvidia-smi failed, continuing anyway..."
 
 # SageMaker extracts model.tar.gz to /opt/ml/model/
 MODEL_REPO=/opt/ml/model/python_backend_model_repository
