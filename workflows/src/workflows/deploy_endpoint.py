@@ -209,8 +209,8 @@ Examples:
     )
     parser.add_argument(
         '--ami-version',
-        default='ami-version-2025-01-07',
-        help='SageMaker inference AMI version (default: ami-version-2025-01-07 with NVIDIA driver 550.144.01, CUDA 12.4)'
+        default='al2-ami-sagemaker-inference-gpu-3-1',
+        help='SageMaker inference AMI version (default: al2-ami-sagemaker-inference-gpu-3-1 - latest valid GPU AMI)'
     )
     parser.add_argument(
         '--region',
