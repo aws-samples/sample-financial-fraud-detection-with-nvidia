@@ -5,15 +5,23 @@ set -e
 SAGEMAKER_MODEL_REPO=/opt/ml/model/
 
 echo "Starting Triton Server with SageMaker integration"
-echo "Model repository: ${SAGEMAKER_MODEL_REPO}"
+echo "Inspecting model directory structure..."
 ls -lR ${SAGEMAKER_MODEL_REPO}
+
+# Check if model.tar.gz extracted with python_backend_model_repository wrapper
+if [ -d "${SAGEMAKER_MODEL_REPO}/python_backend_model_repository" ]; then
+    echo "Found nested python_backend_model_repository, adjusting model repository path"
+    SAGEMAKER_MODEL_REPO="${SAGEMAKER_MODEL_REPO}/python_backend_model_repository"
+fi
+
+echo "Model repository: ${SAGEMAKER_MODEL_REPO}"
 
 # Validate model repository structure
 if [ -f "${SAGEMAKER_MODEL_REPO}/config.pbtxt" ]; then
     echo "ERROR: Incorrect directory structure."
     echo "       Model directory needs to contain the top level folder"
-    echo "       Expected: /opt/ml/model/<model_name>/config.pbtxt"
-    echo "       Found: /opt/ml/model/config.pbtxt"
+    echo "       Expected: ${SAGEMAKER_MODEL_REPO}/<model_name>/config.pbtxt"
+    echo "       Found: ${SAGEMAKER_MODEL_REPO}/config.pbtxt"
     exit 1
 fi
 
