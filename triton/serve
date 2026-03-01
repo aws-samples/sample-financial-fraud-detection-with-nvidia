@@ -1,59 +1,54 @@
 #!/bin/bash
 set -e
 
-# Check GPU availability (suppress errors if nvidia-smi fails)
-if command -v nvidia-smi &> /dev/null; then
-    nvidia-smi 2>&1 || echo "Warning: nvidia-smi failed, continuing anyway..."
-else
-    echo "Warning: nvidia-smi not found, continuing anyway..."
-fi
-
 # SageMaker extracts model.tar.gz to /opt/ml/model/
-MODEL_REPO=/opt/ml/model/python_backend_model_repository
+SAGEMAKER_MODEL_REPO=/opt/ml/model/
 
-echo "Starting Triton Server with model repository at $MODEL_REPO"
-ls -R /opt/ml/model
+echo "Starting Triton Server with SageMaker integration"
+echo "Model repository: ${SAGEMAKER_MODEL_REPO}"
+ls -lR ${SAGEMAKER_MODEL_REPO}
 
-# Check if model repository exists
-if [ ! -d "$MODEL_REPO" ]; then
-    echo "Error: Model repository not found at $MODEL_REPO"
-    if [ -f "/opt/ml/model/config.pbtxt" ]; then
-        MODEL_REPO=/opt/ml/model
-        echo "Found config.pbtxt in /opt/ml/model, using that as repo."
-    else
-        echo "Could not find model repository."
-        exit 1
-    fi
+# Validate model repository structure
+if [ -f "${SAGEMAKER_MODEL_REPO}/config.pbtxt" ]; then
+    echo "ERROR: Incorrect directory structure."
+    echo "       Model directory needs to contain the top level folder"
+    echo "       Expected: /opt/ml/model/<model_name>/config.pbtxt"
+    echo "       Found: /opt/ml/model/config.pbtxt"
+    exit 1
 fi
 
-# Start Triton in background
-echo "Starting Triton on port 8000..."
-tritonserver \
-  --model-repository=$MODEL_REPO \
-  --http-port=8000 \
-  --grpc-port=8001 \
-  --metrics-port=8002 \
-  --log-verbose=1 &
+# Build Triton arguments for SageMaker
+SAGEMAKER_ARGS="--model-repository=${SAGEMAKER_MODEL_REPO}"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --model-namespacing=true"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --allow-grpc=false"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --allow-metrics=false"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --log-verbose=true"
 
-TRITON_PID=$!
+# Auto-detect model name if not specified
+if [ -z "$SAGEMAKER_TRITON_DEFAULT_MODEL_NAME" ]; then
+    MODEL_DIRS=($(find "${SAGEMAKER_MODEL_REPO}" -mindepth 1 -maxdepth 1 -type d -printf "%f\n"))
+    case ${#MODEL_DIRS[@]} in
+        0) echo "ERROR: No model found in model repository"
+           exit 1
+           ;;
+        1) echo "Auto-detected model: ${MODEL_DIRS[0]}"
+           export SAGEMAKER_TRITON_DEFAULT_MODEL_NAME=${MODEL_DIRS[0]}
+           ;;
+        *) echo "ERROR: Multiple model directories found: ${MODEL_DIRS[@]}"
+           echo "       Set SAGEMAKER_TRITON_DEFAULT_MODEL_NAME to specify which model to load"
+           exit 1
+           ;;
+    esac
+fi
 
-# Wait for Triton to be ready
-echo "Waiting for Triton to be ready..."
-for i in {1..120}; do
-    if curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; then
-        echo "Triton is ready!"
-        break
-    fi
-    if ! kill -0 $TRITON_PID 2>/dev/null; then
-        echo "Triton process died"
-        exit 1
-    fi
-    sleep 1
-done
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --load-model=${SAGEMAKER_TRITON_DEFAULT_MODEL_NAME}"
 
-# Start nginx (proxies /ping and /invocations for SageMaker)
-echo "Starting nginx proxy on port 8080..."
-nginx -c /opt/nginx.conf
+echo "Loading model: ${SAGEMAKER_TRITON_DEFAULT_MODEL_NAME}"
+echo "Starting Triton with SageMaker integration..."
 
-# Keep container running by waiting on Triton
-wait $TRITON_PID
+# Start Triton with SageMaker integration
+exec tritonserver \
+  --allow-sagemaker=true \
+  --allow-http=false \
+  --model-control-mode=explicit \
+  ${SAGEMAKER_ARGS}
