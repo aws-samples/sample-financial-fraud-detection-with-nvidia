@@ -7,7 +7,7 @@ ENV CONDA_DIR=/opt/miniconda
 
 # Install base dependencies and clean cache
 RUN apt-get update && apt-get install -y \
-    wget curl git build-essential cmake sudo nginx \
+    wget curl git build-essential cmake sudo \
     cuda-compat-13-0 \
     libopenblas-dev libssl-dev libtinfo-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -68,8 +68,6 @@ RUN python -c "import xgboost; print('XGBoost:', xgboost.__version__)"
 RUN python -c "import captum; print('Captum:', captum.__version__)"
 RUN python -c "import torch_geometric; print('PyG:', torch_geometric.__version__)"
 
-# nginx config for SageMaker /ping and /invocations proxy
-COPY nginx.conf /opt/nginx.conf
 COPY serve /usr/local/bin/serve
 RUN chmod +x /usr/local/bin/serve
 

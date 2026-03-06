@@ -272,7 +272,7 @@ Container images build asynchronously. Wait for all three CodeBuild projects to 
 
 **Endpoint returns 413 Request Entity Too Large**
 
-The nginx proxy in Triton has a body size limit. For large inference batches, rebuild the image after updating `triton/nginx.conf` with a larger `client_max_body_size`.
+Request payloads can exceed endpoint/body limits for very large inference batches. Reduce batch size, split requests into smaller chunks, or use asynchronous/batch inference patterns for large jobs.
 
 **Test fails with "Endpoint not InService"**
 
