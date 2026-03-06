@@ -61,6 +61,7 @@ export class SageMakerTritonEndpointStack extends cdk.Stack {
           {
             initialInstanceCount: 1,
             instanceType: instanceType,
+            inferenceAmiVersion: "al2-ami-sagemaker-inference-gpu-3-1",
             modelName: model.attrModelName,
             variantName: "AllTraffic",
           },

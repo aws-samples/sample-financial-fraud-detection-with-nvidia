@@ -84,7 +84,7 @@ aws codebuild list-builds-for-project \
 
 # Check training image build
 aws codebuild list-builds-for-project \
-  --project-name sagemaker-training-image-build \
+  --project-name sagemaker-training-image-copy \
   --query 'ids[0]' --output text \
   --profile <your-aws-profile> | xargs -I {} \
   aws codebuild batch-get-builds --ids {} \

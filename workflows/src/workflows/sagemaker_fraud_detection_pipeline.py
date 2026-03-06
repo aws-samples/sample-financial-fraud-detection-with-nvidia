@@ -502,14 +502,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "deploy":
+        deploy_kwargs = {
+            "region": args.region,
+            "role_arn": args.role_arn,
+            "default_bucket": args.default_bucket,
+            "endpoint_name": args.endpoint_name,
+            "model_package_group_name": args.model_package_group,
+            "profile_name": args.profile,
+        }
+        if args.instance_type:
+            deploy_kwargs["instance_type"] = args.instance_type
+
         endpoint = deploy_endpoint(
-            region=args.region,
-            role_arn=args.role_arn,
-            default_bucket=args.default_bucket,
-            endpoint_name=args.endpoint_name,
-            instance_type=args.instance_type,
-            model_package_group_name=args.model_package_group,
-            profile_name=args.profile,
+            **deploy_kwargs,
         )
     elif args.command == "register":
         register_model(
