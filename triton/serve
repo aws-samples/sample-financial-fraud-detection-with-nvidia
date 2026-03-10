@@ -1,54 +1,87 @@
 #!/bin/bash
 set -e
 
-nvidia-smi --version
+# AWS SageMaker CUDA Compatibility Setup
+# Dynamically enable CUDA compatibility libraries based on driver version
+verlt() {
+    [ "$1" = "$2" ] && return 1 || [ "$1" = "$(echo -e "$1\n$2" | sort -V | head -n1)" ]
+}
 
-# SageMaker extracts model.tar.gz to /opt/ml/model/
-MODEL_REPO=/opt/ml/model/python_backend_model_repository
-
-echo "Starting Triton Server with model repository at $MODEL_REPO"
-ls -R /opt/ml/model
-
-# Check if model repository exists
-if [ ! -d "$MODEL_REPO" ]; then
-    echo "Error: Model repository not found at $MODEL_REPO"
-    if [ -f "/opt/ml/model/config.pbtxt" ]; then
-        MODEL_REPO=/opt/ml/model
-        echo "Found config.pbtxt in /opt/ml/model, using that as repo."
+# Check for CUDA 13.0 compat libraries
+CUDA_COMPAT_PATH="/usr/local/cuda-13.0/compat"
+if [ -f "${CUDA_COMPAT_PATH}/libcuda.so.1" ]; then
+    CUDA_COMPAT_MAX_DRIVER_VERSION=$(readlink ${CUDA_COMPAT_PATH}/libcuda.so.1 | cut -d'.' -f 3-)
+    echo "CUDA compat package found for NVIDIA driver smaller than ${CUDA_COMPAT_MAX_DRIVER_VERSION}"
+    NVIDIA_DRIVER_VERSION=$(sed -n 's/^NVRM.*Kernel Module *\([0-9.]*\).*$/\1/p' /proc/driver/nvidia/version 2>/dev/null || true)
+    echo "Current installed NVIDIA driver version is ${NVIDIA_DRIVER_VERSION}"
+    if [ -z "$NVIDIA_DRIVER_VERSION" ] || verlt $NVIDIA_DRIVER_VERSION $CUDA_COMPAT_MAX_DRIVER_VERSION; then
+        echo "Adding CUDA compat to LD_LIBRARY_PATH"
+        export LD_LIBRARY_PATH=${CUDA_COMPAT_PATH}:$LD_LIBRARY_PATH
+        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
     else
-        echo "Could not find model repository."
-        exit 1
+        echo "Skipping CUDA compat setup as newer NVIDIA driver is installed"
     fi
+else
+    echo "WARNING: CUDA compat package not found at ${CUDA_COMPAT_PATH}"
+    echo "Attempting to use CUDA 13.0 anyway - may fail if driver is incompatible"
 fi
 
-# Start Triton in background
-echo "Starting Triton on port 8000..."
-tritonserver \
-  --model-repository=$MODEL_REPO \
-  --http-port=8000 \
-  --grpc-port=8001 \
-  --metrics-port=8002 \
-  --log-verbose=1 &
+# SageMaker extracts model.tar.gz to /opt/ml/model/
+SAGEMAKER_MODEL_REPO=/opt/ml/model/
 
-TRITON_PID=$!
+echo "Starting Triton Server with SageMaker integration"
+echo "Inspecting model directory structure..."
+ls -lR ${SAGEMAKER_MODEL_REPO}
 
-# Wait for Triton to be ready
-echo "Waiting for Triton to be ready..."
-for i in {1..120}; do
-    if curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; then
-        echo "Triton is ready!"
-        break
-    fi
-    if ! kill -0 $TRITON_PID 2>/dev/null; then
-        echo "Triton process died"
-        exit 1
-    fi
-    sleep 1
-done
+# Check if model.tar.gz extracted with python_backend_model_repository wrapper
+if [ -d "${SAGEMAKER_MODEL_REPO}/python_backend_model_repository" ]; then
+    echo "Found nested python_backend_model_repository, adjusting model repository path"
+    SAGEMAKER_MODEL_REPO="${SAGEMAKER_MODEL_REPO}/python_backend_model_repository"
+fi
 
-# Start nginx (proxies /ping and /invocations for SageMaker)
-echo "Starting nginx proxy on port 8080..."
-nginx -c /opt/nginx.conf
+echo "Model repository: ${SAGEMAKER_MODEL_REPO}"
 
-# Keep container running by waiting on Triton
-wait $TRITON_PID
+# Validate model repository structure
+if [ -f "${SAGEMAKER_MODEL_REPO}/config.pbtxt" ]; then
+    echo "ERROR: Incorrect directory structure."
+    echo "       Model directory needs to contain the top level folder"
+    echo "       Expected: ${SAGEMAKER_MODEL_REPO}/<model_name>/config.pbtxt"
+    echo "       Found: ${SAGEMAKER_MODEL_REPO}/config.pbtxt"
+    exit 1
+fi
+
+# Build Triton arguments for SageMaker
+SAGEMAKER_ARGS="--model-repository=${SAGEMAKER_MODEL_REPO}"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --model-namespacing=true"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --allow-grpc=false"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --allow-metrics=false"
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --log-verbose=true"
+
+# Auto-detect model name if not specified
+if [ -z "$SAGEMAKER_TRITON_DEFAULT_MODEL_NAME" ]; then
+    MODEL_DIRS=($(find "${SAGEMAKER_MODEL_REPO}" -mindepth 1 -maxdepth 1 -type d -printf "%f\n"))
+    case ${#MODEL_DIRS[@]} in
+        0) echo "ERROR: No model found in model repository"
+           exit 1
+           ;;
+        1) echo "Auto-detected model: ${MODEL_DIRS[0]}"
+           export SAGEMAKER_TRITON_DEFAULT_MODEL_NAME=${MODEL_DIRS[0]}
+           ;;
+        *) echo "ERROR: Multiple model directories found: ${MODEL_DIRS[@]}"
+           echo "       Set SAGEMAKER_TRITON_DEFAULT_MODEL_NAME to specify which model to load"
+           exit 1
+           ;;
+    esac
+fi
+
+SAGEMAKER_ARGS="${SAGEMAKER_ARGS} --load-model=${SAGEMAKER_TRITON_DEFAULT_MODEL_NAME}"
+
+echo "Loading model: ${SAGEMAKER_TRITON_DEFAULT_MODEL_NAME}"
+echo "Starting Triton with SageMaker integration..."
+
+# Start Triton with SageMaker integration
+exec tritonserver \
+  --allow-sagemaker=true \
+  --allow-http=false \
+  --model-control-mode=explicit \
+  ${SAGEMAKER_ARGS}

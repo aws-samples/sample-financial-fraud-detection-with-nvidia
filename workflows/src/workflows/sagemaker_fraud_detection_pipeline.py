@@ -234,13 +234,13 @@ def get_pipeline(
         name="ProcessingInstanceCount", default_value=1
     )
     processing_instance_type = ParameterString(
-        name="ProcessingInstanceType", default_value="ml.g6e.2xlarge"
+        name="ProcessingInstanceType", default_value="ml.g4dn.4xlarge"
     )
     training_instance_count = ParameterInteger(
         name="TrainingInstanceCount", default_value=1
     )
     training_instance_type = ParameterString(
-        name="TrainingInstanceType", default_value="ml.g6e.2xlarge"
+        name="TrainingInstanceType", default_value="ml.g5.xlarge"
     )
 
     input_data_url = ParameterString(
@@ -271,7 +271,7 @@ def get_pipeline(
 
     processor = Processor(
         image_uri=processing_image_uri,
-        instance_type="ml.g6e.2xlarge",
+        instance_type="ml.g4dn.4xlarge",
         instance_count=1,
         base_job_name=f"{base_job_prefix}-preprocess",
         sagemaker_session=pipeline_session,
@@ -323,7 +323,7 @@ def get_pipeline(
     model_trainer = ModelTrainer(
         training_image=training_image_uri,
         compute=Compute(
-            instance_type="ml.g6e.2xlarge",
+            instance_type="ml.g5.xlarge",
             instance_count=1,
         ),
         base_job_name=f"{base_job_prefix}-train",
@@ -502,14 +502,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.command == "deploy":
+        deploy_kwargs = {
+            "region": args.region,
+            "role_arn": args.role_arn,
+            "default_bucket": args.default_bucket,
+            "endpoint_name": args.endpoint_name,
+            "model_package_group_name": args.model_package_group,
+            "profile_name": args.profile,
+        }
+        if args.instance_type:
+            deploy_kwargs["instance_type"] = args.instance_type
+
         endpoint = deploy_endpoint(
-            region=args.region,
-            role_arn=args.role_arn,
-            default_bucket=args.default_bucket,
-            endpoint_name=args.endpoint_name,
-            instance_type=args.instance_type,
-            model_package_group_name=args.model_package_group,
-            profile_name=args.profile,
+            **deploy_kwargs,
         )
     elif args.command == "register":
         register_model(

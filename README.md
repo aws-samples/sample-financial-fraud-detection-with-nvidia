@@ -84,7 +84,7 @@ aws codebuild list-builds-for-project \
 
 # Check training image build
 aws codebuild list-builds-for-project \
-  --project-name sagemaker-training-image-build \
+  --project-name sagemaker-training-image-copy \
   --query 'ids[0]' --output text \
   --profile <your-aws-profile> | xargs -I {} \
   aws codebuild batch-get-builds --ids {} \
@@ -272,7 +272,7 @@ Container images build asynchronously. Wait for all three CodeBuild projects to 
 
 **Endpoint returns 413 Request Entity Too Large**
 
-The nginx proxy in Triton has a body size limit. For large inference batches, rebuild the image after updating `triton/nginx.conf` with a larger `client_max_body_size`.
+Request payloads can exceed endpoint/body limits for very large inference batches. Reduce batch size, split requests into smaller chunks, or use asynchronous/batch inference patterns for large jobs.
 
 **Test fails with "Endpoint not InService"**
 
