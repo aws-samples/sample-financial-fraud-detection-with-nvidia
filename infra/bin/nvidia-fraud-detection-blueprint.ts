@@ -51,7 +51,7 @@ const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
   branch: "v2_sagemaker",
 });
 
-// 3. Base Infrastructure (VPC, S3)
+// 3. Base Infrastructure (S3 buckets)
 const baseInfra = new NvidiaFraudDetectionBlueprint(
   app,
   "NvidiaFraudDetectionBlueprint",

@@ -22,7 +22,7 @@ The main pipeline is defined in `src/workflows/sagemaker_fraud_detection_pipelin
 uv sync
 
 # Deploy the pipeline
-python -m src.workflows.sagemaker_fraud_detection_pipeline \
+python -m workflows.sagemaker_fraud_detection_pipeline \
   --role-arn <sagemaker-execution-role-arn> \
   --default-bucket <s3-bucket-name> \
   --region <aws-region> \
