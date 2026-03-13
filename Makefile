@@ -12,7 +12,7 @@ SHELL := /bin/bash
 # =============================================================================
 # Configuration - override with environment variables
 # =============================================================================
-AWS_PROFILE ?= zjacobso+nvidia-Admin
+AWS_PROFILE ?= default
 AWS_REGION ?= us-east-1
 MODEL_PACKAGE_GROUP ?= fraud-detection-models
 ENDPOINT_NAME ?= fraud-detection-endpoint

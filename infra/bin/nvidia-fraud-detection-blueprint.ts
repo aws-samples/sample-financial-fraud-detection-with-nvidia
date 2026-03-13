@@ -15,8 +15,6 @@ const env = {
 };
 
 // Config
-const ngcSecretName = app.node.tryGetContext("ngcSecretName") || "ngc-api-key";
-// Use sm suffix (sm = sagemaker) to distinguish from old kubeflow buckets
 const modelBucketName =
   "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
 const dataBucketName = modelBucketName;
@@ -53,7 +51,7 @@ const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
   branch: "v2_sagemaker",
 });
 
-// 3. Base Infrastructure (VPC, S3)
+// 3. Base Infrastructure (S3 buckets)
 const baseInfra = new NvidiaFraudDetectionBlueprint(
   app,
   "NvidiaFraudDetectionBlueprint",
