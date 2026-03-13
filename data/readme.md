@@ -1,9 +1,18 @@
 # Data Folder
 
-This folder contains the datasets used for the Financial Fraud Detection project. Below is a brief description of each file:
+This folder holds local copies of datasets used for the Financial Fraud Detection project. All contents are gitignored.
 
-- `transactions.csv`: Contains transaction records with features such as transaction amount, date, and type.
-- `customers.csv`: Includes customer information like customer ID, age, and account details.
-- `fraud_labels.csv`: Provides labels indicating whether a transaction is fraudulent or not.
+## TabFormer Dataset
 
-Please ensure that these files are kept confidential and are not shared outside the project team.
+The primary dataset is IBM's **TabFormer** (`card_transaction.v1.csv`) — a synthetic credit card transaction dataset with ~24M records across 5,000 cardholders and 1,000 merchants.
+
+For download instructions, see [notebooks/extra/download.md](../notebooks/extra/download.md).
+
+After downloading, upload to S3 for pipeline use:
+
+```bash
+# Run 'make info' to find your actual bucket name
+aws s3 cp card_transaction.v1.csv \
+  s3://fraud-detection-<account>-sm/data/TabFormer/raw/ \
+  --profile <your-aws-profile>
+```

@@ -4,7 +4,7 @@ Financial fraud costs institutions billions annually, and traditional rule-based
 
 The insight is simple. Fraudsters don't operate in isolation. They create patterns across multiple accounts, merchants, and time windows that become visible when you model transactions as a graph. A single suspicious transaction might look normal. That same transaction connected to a web of related activity tells a different story.
 
-![Architecture](docs/arch-diagram.png)
+> See [docs/aws-architecture-mermaid.md](docs/aws-architecture-mermaid.md) for the full architecture diagram (Mermaid).
 
 This implementation runs entirely on AWS using SageMaker Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK with a fully managed, serverless approach that eliminates cluster management overhead.
 
@@ -109,6 +109,7 @@ Download the TabFormer dataset and upload to S3:
 
 ```bash
 # See notebooks/extra/download.md for download instructions
+# Run 'make info' to find your actual bucket name
 aws s3 cp card_transaction.v1.csv \
   s3://fraud-detection-<account>-sm/data/TabFormer/raw/ \
   --profile <your-aws-profile>
@@ -209,6 +210,8 @@ The `workflows/` directory contains the SageMaker pipeline definition:
 ```
 workflows/
 ├── src/workflows/
+│   ├── __init__.py
+│   ├── deploy_endpoint.py
 │   ├── sagemaker_fraud_detection_pipeline.py
 │   └── test_endpoint.py
 ├── pyproject.toml
