@@ -15,8 +15,6 @@ const env = {
 };
 
 // Config
-const ngcSecretName = app.node.tryGetContext("ngcSecretName") || "ngc-api-key";
-// Use sm suffix (sm = sagemaker) to distinguish from old kubeflow buckets
 const modelBucketName =
   "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
 const dataBucketName = modelBucketName;
