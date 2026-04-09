@@ -28,7 +28,7 @@ const trainingImageRepo = new SageMakerTrainingImageRepoStack(
     env: env,
     repoUrl:
       "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker",
+    branch: "main",
   },
 );
 
