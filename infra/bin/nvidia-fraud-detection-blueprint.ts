@@ -3,6 +3,7 @@ import { NvidiaFraudDetectionBlueprint } from "../lib/nvidia-fraud-detection-blu
 import { SageMakerTrainingImageRepoStack } from "../lib/sagemaker-training-image-repo";
 import { SageMakerPreprocessingImageRepoStack } from "../lib/sagemaker-preprocessing-image-repo";
 import { TritonImageRepoStack } from "../lib/triton-image-repo";
+import { NeptuneGraphStack } from "../lib/neptune-graph-stack";
 import { SageMakerInfraStack } from "../lib/sagemaker-infrastructure-stack";
 import { SageMakerTritonEndpointStack } from "../lib/sagemaker-triton-endpoint-stack";
 import { SageMakerDomainStack } from "../lib/sagemaker-domain-stack";
@@ -70,6 +71,13 @@ const smInfra = new SageMakerInfraStack(app, "SageMakerInfraStack", {
   modelBucketName: modelBucketName,
 });
 smInfra.addDependency(baseInfra);
+
+// 4b. Neptune Graph Database
+const neptuneStack = new NeptuneGraphStack(app, "NeptuneGraphStack", {
+  env: env,
+  sagemakerExecutionRole: smInfra.sagemakerExecutionRole,
+});
+neptuneStack.addDependency(smInfra);
 
 // 5. SageMaker Domain (for Studio access to Pipelines)
 const domainStack = new SageMakerDomainStack(app, "SageMakerDomainStack", {

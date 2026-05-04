@@ -907,6 +907,31 @@ def preprocess_data(tabformer_base_path):
         fmt="%d",
     )
 
+    # --- Neptune Integration ---
+    # If NEPTUNE_ENDPOINT is set, also write graph data to Neptune
+    neptune_endpoint = os.environ.get("NEPTUNE_ENDPOINT")
+    if neptune_endpoint:
+        from neptune_client import NeptuneClient
+
+        print("Writing graph data to Neptune...")
+        client = NeptuneClient(endpoint=neptune_endpoint)
+
+        # Re-read the CSVs we just wrote for the training set
+        _user_csv = pd.read_csv(os.path.join(tabformer_gnn, "nodes/user.csv"))
+        _mx_csv = pd.read_csv(os.path.join(tabformer_gnn, "nodes/merchant.csv"))
+        _edge_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant.csv"))
+        _attr_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant_attr.csv"))
+        _label_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant_label.csv"))
+
+        print("  Writing users...")
+        client.write_users_batch(_user_csv)
+        print("  Writing merchants...")
+        client.write_merchants_batch(_mx_csv)
+        print("  Writing transactions...")
+        _edge_idx = _edge_csv.values.T.astype(np.int64)
+        client.write_transactions_batch(_edge_idx, _attr_csv, _label_csv)
+        print(f"  Neptune graph stats: {client.get_graph_stats()}")
+
     return user_mask_map, mx_mask_map, tx_mask_map
 
 
@@ -919,7 +944,17 @@ def load_hetero_graph(base):
           base        -> edge_index_<edge> (np.int64)
           *_attr.csv  -> edge_attr_<edge>  (np.float32)
           *_label.csv -> exactly one -> edge_label_<edge> (DataFrame)
+
+    If NEPTUNE_ENDPOINT env var is set, loads from Neptune instead of CSV files.
     """
+
+    # If NEPTUNE_ENDPOINT is set, load from Neptune instead of CSV
+    neptune_endpoint = os.environ.get("NEPTUNE_ENDPOINT")
+    if neptune_endpoint:
+        from neptune_client import NeptuneClient
+
+        client = NeptuneClient(endpoint=neptune_endpoint)
+        return client.load_hetero_graph()
 
     nodes_dir = os.path.join(base, "nodes")
     edges_dir = os.path.join(base, "edges")
