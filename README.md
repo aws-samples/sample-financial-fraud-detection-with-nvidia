@@ -14,6 +14,8 @@ The processed transaction graph is persisted to Amazon Neptune Serverless, repla
 
 A few things to be aware of. Neptune Serverless scales from 1 to 8 NCUs based on demand, but the cold-start window matters. The first batch writes after a period of inactivity hit a cluster sitting at minimum capacity. The client handles this with small batch sizes (50 nodes, 100 edges), exponential backoff retries on timeouts and 5xx responses, and a clear-then-CREATE pattern instead of MERGE to avoid lock contention. If you see `ConcurrentModificationException` errors in the logs, the retries should absorb them — but if they persist, bumping `minCapacity` in `infra/lib/neptune-graph-stack.ts` from 1 to 2 NCUs will help at the cost of a higher baseline bill.
 
+> **Warning:** The preprocessing step clears the entire Neptune graph before writing. This is acceptable for this blueprint where the pipeline reprocesses the full dataset each run, but is not suitable for production workloads with incremental ingestion or concurrent readers. A production implementation should use MERGE-based upserts (with a higher NCU floor to avoid lock contention) or batch loading via Neptune's bulk loader.
+
 ## The Pipeline
 
 When you trigger a pipeline run, three stages execute in sequence.
