@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 
 import boto3
 import numpy as np
@@ -24,17 +25,32 @@ class NeptuneClient:
             session = boto3.Session(region_name=self.region)
             self.credentials = session.get_credentials().get_frozen_credentials()
 
-    def _signed_request(self, method, path, data=None):
+    def _signed_request(self, method, path, data=None, retries=3):
         url = f"{self.base_url}{path}"
-        headers = {"Content-Type": "application/json"}
-        body = json.dumps(data) if data else None
-        if self.iam_auth:
-            req = AWSRequest(method=method, url=url, data=body, headers=headers)
-            SigV4Auth(self.credentials, "neptune-db", self.region).add_auth(req)
-            headers.update(dict(req.headers))
-        resp = requests.request(method, url, json=data, headers=headers, timeout=300)
-        resp.raise_for_status()
-        return resp.json()
+        for attempt in range(retries):
+            headers = {"Content-Type": "application/json"}
+            body = json.dumps(data) if data else None
+            if self.iam_auth:
+                req = AWSRequest(method=method, url=url, data=body, headers=headers)
+                SigV4Auth(self.credentials, "neptune-db", self.region).add_auth(req)
+                headers.update(dict(req.headers))
+            try:
+                resp = requests.request(
+                    method, url, json=data, headers=headers, timeout=600
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except (
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError,
+            ) as e:
+                if attempt == retries - 1:
+                    raise
+                wait = 2 ** (attempt + 1)
+                print(
+                    f"  Neptune request timed out, retrying in {wait}s (attempt {attempt + 1}/{retries})..."
+                )
+                time.sleep(wait)
 
     def execute_opencypher(self, query, parameters=None):
         data = {"query": query}
@@ -47,7 +63,7 @@ class NeptuneClient:
 
     # --- Batch writes ---
 
-    def write_users_batch(self, user_df, batch_size=500):
+    def write_users_batch(self, user_df, batch_size=50):
         rows = [
             {"uid": int(idx), "features": json.dumps(row.values.tolist())}
             for idx, row in user_df.iterrows()
@@ -55,7 +71,7 @@ class NeptuneClient:
         for i in range(0, len(rows), batch_size):
             self._batch_merge_nodes("User", "uid", rows[i : i + batch_size])
 
-    def write_merchants_batch(self, merchant_df, batch_size=500):
+    def write_merchants_batch(self, merchant_df, batch_size=50):
         rows = [
             {"mid": int(idx), "features": json.dumps(row.values.tolist())}
             for idx, row in merchant_df.iterrows()
@@ -64,7 +80,7 @@ class NeptuneClient:
             self._batch_merge_nodes("Merchant", "mid", rows[i : i + batch_size])
 
     def write_transactions_batch(
-        self, edge_index, edge_attr_df, edge_label_df, batch_size=500
+        self, edge_index, edge_attr_df, edge_label_df, batch_size=100
     ):
         rows = [
             {
@@ -102,9 +118,9 @@ class NeptuneClient:
         records = result.get("results", [])
         if not records:
             return pd.DataFrame()
-        return pd.DataFrame(
-            [json.loads(r["features"]) for r in records]
-        ).astype(np.float32)
+        return pd.DataFrame([json.loads(r["features"]) for r in records]).astype(
+            np.float32
+        )
 
     def read_merchants(self):
         result = self.execute_opencypher(
@@ -113,9 +129,9 @@ class NeptuneClient:
         records = result.get("results", [])
         if not records:
             return pd.DataFrame()
-        return pd.DataFrame(
-            [json.loads(r["features"]) for r in records]
-        ).astype(np.float32)
+        return pd.DataFrame([json.loads(r["features"]) for r in records]).astype(
+            np.float32
+        )
 
     def read_transactions(self):
         result = self.execute_opencypher(
@@ -125,13 +141,17 @@ class NeptuneClient:
         )
         records = result.get("results", [])
         if not records:
-            return np.empty((2, 0), dtype=np.int64), pd.DataFrame(), pd.DataFrame({"Fraud": []})
+            return (
+                np.empty((2, 0), dtype=np.int64),
+                pd.DataFrame(),
+                pd.DataFrame({"Fraud": []}),
+            )
         uids = [r["uid"] for r in records]
         mids = [r["mid"] for r in records]
         edge_index = np.array([uids, mids], dtype=np.int64)
-        edge_attr = pd.DataFrame(
-            [json.loads(r["features"]) for r in records]
-        ).astype(np.float32)
+        edge_attr = pd.DataFrame([json.loads(r["features"]) for r in records]).astype(
+            np.float32
+        )
         edge_labels = pd.DataFrame({"Fraud": [r["fraud"] for r in records]})
         return edge_index, edge_attr, edge_labels
 
@@ -147,7 +167,9 @@ class NeptuneClient:
             out["feature_mask_user"] = np.zeros(user_df.shape[1], dtype=np.int32)
         if not merchant_df.empty:
             out["x_merchant"] = merchant_df.to_numpy(dtype=np.float32)
-            out["feature_mask_merchant"] = np.zeros(merchant_df.shape[1], dtype=np.int32)
+            out["feature_mask_merchant"] = np.zeros(
+                merchant_df.shape[1], dtype=np.int32
+            )
         if not edge_attr.empty:
             out["edge_index_user_to_merchant"] = edge_index
             out["edge_attr_user_to_merchant"] = edge_attr.to_numpy(dtype=np.float32)
@@ -164,6 +186,10 @@ class NeptuneClient:
         return {
             "users": _count("MATCH (u:User) RETURN count(u) AS cnt"),
             "merchants": _count("MATCH (m:Merchant) RETURN count(m) AS cnt"),
-            "transactions": _count("MATCH ()-[t:TRANSACTION]->() RETURN count(t) AS cnt"),
-            "fraud": _count("MATCH ()-[t:TRANSACTION]->() WHERE t.fraud = 1 RETURN count(t) AS cnt"),
+            "transactions": _count(
+                "MATCH ()-[t:TRANSACTION]->() RETURN count(t) AS cnt"
+            ),
+            "fraud": _count(
+                "MATCH ()-[t:TRANSACTION]->() WHERE t.fraud = 1 RETURN count(t) AS cnt"
+            ),
         }
