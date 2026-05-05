@@ -13,6 +13,7 @@ ENV CUDA_VISIBLE_DEVICES=0
 RUN pip install sagemaker-training
 
 # Copy the SageMaker training wrapper
+COPY src/neptune_client.py neptune_client.py
 COPY src/train_sagemaker.py train_sagemaker.py
 
 # Set the entrypoint to the wrapper script
