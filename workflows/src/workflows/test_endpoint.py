@@ -85,8 +85,15 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
         dict with keys matching the model's expected inputs, plus ground truth labels
     """
 
-    # If NEPTUNE_ENDPOINT is set, load from Neptune instead of S3
+    # Resolve Neptune endpoint: prefer env var, fall back to CloudFormation export
     neptune_endpoint = os.environ.get("NEPTUNE_ENDPOINT")
+    if not neptune_endpoint:
+        try:
+            cf = boto3.client("cloudformation")
+            exports = {e["Name"]: e["Value"] for e in cf.list_exports()["Exports"]}
+            neptune_endpoint = exports.get("NeptuneClusterEndpoint")
+        except Exception:
+            pass
     if neptune_endpoint:
         from neptune_client import NeptuneClient
 
@@ -116,12 +123,12 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
             indices = np.sort(
                 np.random.choice(len(labels), max_transactions, replace=False)
             )
-            data["edge_index_user_to_merchant"] = data[
-                "edge_index_user_to_merchant"
-            ][:, indices]
-            data["edge_attr_user_to_merchant"] = data[
-                "edge_attr_user_to_merchant"
-            ][indices]
+            data["edge_index_user_to_merchant"] = data["edge_index_user_to_merchant"][
+                :, indices
+            ]
+            data["edge_attr_user_to_merchant"] = data["edge_attr_user_to_merchant"][
+                indices
+            ]
             labels = labels[indices]
         print(f"  Loaded {len(labels)} transactions from Neptune")
         return data, labels

@@ -2,6 +2,7 @@ import os
 
 import boto3
 from sagemaker.core.helper.session_helper import Session
+from sagemaker.core.network import NetworkConfig
 from sagemaker.core.processing import Processor
 from sagemaker.core.resources import Endpoint, EndpointConfig, Model
 from sagemaker.core.shapes import (
@@ -226,6 +227,18 @@ def get_pipeline(
     )
     account_id = sagemaker_session.account_id()
 
+    # Resolve Neptune networking from CloudFormation exports
+    cf_client = boto3.Session(
+        region_name=region,
+        **({"profile_name": profile_name} if profile_name else {}),
+    ).client("cloudformation")
+    exports = cf_client.list_exports()["Exports"]
+    export_map = {e["Name"]: e["Value"] for e in exports}
+    neptune_endpoint = export_map["NeptuneClusterEndpoint"]
+    neptune_port = export_map["NeptuneClusterPort"]
+    neptune_subnets = export_map["NeptunePrivateSubnetIds"].split(",")
+    neptune_sg_id = export_map["NeptuneSecurityGroupId"]
+
     cache_true_config = CacheConfig(enable_caching=True, expire_after="1d")
     cache_false_config = CacheConfig(enable_caching=False, expire_after="1d")
 
@@ -276,6 +289,14 @@ def get_pipeline(
         base_job_name=f"{base_job_prefix}-preprocess",
         sagemaker_session=pipeline_session,
         role=role_arn,
+        env={
+            "NEPTUNE_ENDPOINT": neptune_endpoint,
+            "NEPTUNE_PORT": neptune_port,
+        },
+        network_config=NetworkConfig(
+            subnets=neptune_subnets,
+            security_group_ids=[neptune_sg_id],
+        ),
     )
 
     processor_args = processor.run(

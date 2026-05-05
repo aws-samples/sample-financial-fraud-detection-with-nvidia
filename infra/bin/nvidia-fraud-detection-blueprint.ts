@@ -15,6 +15,8 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION,
 };
 
+const branch = "feature/neptune-graph-backend";
+
 // Config
 const modelBucketName =
   "fraud-detection-" + process.env.CDK_DEFAULT_ACCOUNT + "-sm";
@@ -29,7 +31,7 @@ const trainingImageRepo = new SageMakerTrainingImageRepoStack(
     env: env,
     repoUrl:
       "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "main",
+    branch: branch,
   },
 );
 
@@ -40,7 +42,7 @@ const preprocessingImageRepo = new SageMakerPreprocessingImageRepoStack(
     env: env,
     repoUrl:
       "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker",
+    branch: branch,
   },
 );
 
@@ -49,7 +51,7 @@ const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
   env: env,
   repoUrl:
     "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-  branch: "v2_sagemaker",
+  branch: branch,
 });
 
 // 3. Base Infrastructure (S3 buckets)
@@ -75,7 +77,7 @@ smInfra.addDependency(baseInfra);
 // 4b. Neptune Graph Database
 const neptuneStack = new NeptuneGraphStack(app, "NeptuneGraphStack", {
   env: env,
-  sagemakerExecutionRole: smInfra.sagemakerExecutionRole,
+  sagemakerExecutionRoleArn: smInfra.sagemakerExecutionRoleArn,
 });
 neptuneStack.addDependency(smInfra);
 

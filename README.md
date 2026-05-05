@@ -4,7 +4,7 @@ Financial fraud costs institutions billions annually, and traditional rule-based
 
 The insight is simple. Fraudsters don't operate in isolation. They create patterns across multiple accounts, merchants, and time windows that become visible when you model transactions as a graph. A single suspicious transaction might look normal. That same transaction connected to a web of related activity tells a different story.
 
-> See [docs/aws-architecture-mermaid.md](docs/aws-architecture-mermaid.md) for the full architecture diagram (Mermaid).
+![GNN Fraud Detection Architecture](docs/gnn_fraud_detection_architecture_light.png)
 
 This implementation runs entirely on AWS using SageMaker Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK with a fully managed, serverless approach that eliminates cluster management overhead.
 

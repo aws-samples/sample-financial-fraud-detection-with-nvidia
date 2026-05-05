@@ -1,11 +1,11 @@
-import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as neptune from '@aws-cdk/aws-neptune-alpha';
-import { Construct } from 'constructs';
+import * as cdk from "aws-cdk-lib";
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as neptune from "@aws-cdk/aws-neptune-alpha";
+import { Construct } from "constructs";
 
 export interface NeptuneGraphStackProps extends cdk.StackProps {
-  sagemakerExecutionRole: iam.IRole;
+  sagemakerExecutionRoleArn: string;
 }
 
 export class NeptuneGraphStack extends cdk.Stack {
@@ -17,12 +17,20 @@ export class NeptuneGraphStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: NeptuneGraphStackProps) {
     super(scope, id, props);
 
-    this.vpc = new ec2.Vpc(this, 'NeptuneVpc', {
+    this.vpc = new ec2.Vpc(this, "NeptuneVpc", {
       maxAzs: 2,
       natGateways: 1,
+      gatewayEndpoints: {
+        S3: { service: ec2.GatewayVpcEndpointAwsService.S3 },
+      },
     });
 
-    const cluster = new neptune.DatabaseCluster(this, 'NeptuneCluster', {
+    // Interface endpoint for CloudWatch Logs (SageMaker job logging)
+    this.vpc.addInterfaceEndpoint("CloudWatchLogsEndpoint", {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+    });
+
+    const cluster = new neptune.DatabaseCluster(this, "NeptuneCluster", {
       vpc: this.vpc,
       instanceType: neptune.InstanceType.SERVERLESS,
       iamAuthentication: true,
@@ -36,26 +44,55 @@ export class NeptuneGraphStack extends cdk.Stack {
 
     cluster.connections.allowDefaultPortFrom(
       ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
-      'Neptune access from VPC',
+      "Neptune access from VPC",
     );
 
-    cluster.grantConnect(props.sagemakerExecutionRole);
+    // Create the Neptune access policy locally in this stack to avoid a cyclic
+    // cross-stack reference (cluster resource ID must stay in this template).
+    const sagemakerRole = iam.Role.fromRoleArn(
+      this,
+      "ImportedSageMakerRole",
+      props.sagemakerExecutionRoleArn,
+      {
+        mutable: false,
+      },
+    );
+
+    new iam.Policy(this, "NeptuneConnectPolicy", {
+      roles: [sagemakerRole],
+      statements: [
+        new iam.PolicyStatement({
+          actions: ["neptune-db:*"],
+          resources: [
+            `arn:aws:neptune-db:${this.region}:${this.account}:${cluster.clusterResourceIdentifier}/*`,
+          ],
+        }),
+      ],
+    });
 
     this.securityGroup = cluster.connections.securityGroups[0];
     this.clusterEndpoint = cluster.clusterEndpoint.hostname;
     this.clusterPort = cluster.clusterEndpoint.port.toString();
 
-    new cdk.CfnOutput(this, 'NeptuneEndpoint', {
+    new cdk.CfnOutput(this, "NeptuneEndpoint", {
       value: cluster.clusterEndpoint.hostname,
-      exportName: 'NeptuneClusterEndpoint',
+      exportName: "NeptuneClusterEndpoint",
     });
-    new cdk.CfnOutput(this, 'NeptunePort', {
+    new cdk.CfnOutput(this, "NeptunePort", {
       value: cluster.clusterEndpoint.port.toString(),
-      exportName: 'NeptuneClusterPort',
+      exportName: "NeptuneClusterPort",
     });
-    new cdk.CfnOutput(this, 'VpcId', {
+    new cdk.CfnOutput(this, "VpcId", {
       value: this.vpc.vpcId,
-      exportName: 'NeptuneVpcId',
+      exportName: "NeptuneVpcId",
+    });
+    new cdk.CfnOutput(this, "NeptuneSubnetIds", {
+      value: this.vpc.privateSubnets.map((s) => s.subnetId).join(","),
+      exportName: "NeptunePrivateSubnetIds",
+    });
+    new cdk.CfnOutput(this, "NeptuneSecurityGroupId", {
+      value: this.securityGroup.securityGroupId,
+      exportName: "NeptuneSecurityGroupId",
     });
   }
 }
