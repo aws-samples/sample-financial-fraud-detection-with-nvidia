@@ -25,7 +25,7 @@ class NeptuneClient:
             session = boto3.Session(region_name=self.region)
             self.credentials = session.get_credentials().get_frozen_credentials()
 
-    def _signed_request(self, method, path, data=None, retries=3):
+    def _signed_request(self, method, path, data=None, retries=5):
         url = f"{self.base_url}{path}"
         for attempt in range(retries):
             headers = {"Content-Type": "application/json"}
@@ -38,17 +38,26 @@ class NeptuneClient:
                 resp = requests.request(
                     method, url, json=data, headers=headers, timeout=600
                 )
+                if resp.status_code >= 500:
+                    # Neptune returns 5xx when overwhelmed or scaling up
+                    print(f"  Neptune returned {resp.status_code}: {resp.text[:500]}")
+                    if attempt == retries - 1:
+                        resp.raise_for_status()
+                    wait = 2 ** (attempt + 1)
+                    print(f"  Retrying in {wait}s (attempt {attempt + 1}/{retries})...")
+                    time.sleep(wait)
+                    continue
                 resp.raise_for_status()
                 return resp.json()
             except (
                 requests.exceptions.ReadTimeout,
                 requests.exceptions.ConnectionError,
-            ) as e:
+            ):
                 if attempt == retries - 1:
                     raise
                 wait = 2 ** (attempt + 1)
                 print(
-                    f"  Neptune request timed out, retrying in {wait}s (attempt {attempt + 1}/{retries})..."
+                    f"  Neptune request failed, retrying in {wait}s (attempt {attempt + 1}/{retries})..."
                 )
                 time.sleep(wait)
 
