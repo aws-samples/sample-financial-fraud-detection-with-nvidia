@@ -915,13 +915,21 @@ def preprocess_data(tabformer_base_path):
 
         print("Writing graph data to Neptune...")
         client = NeptuneClient(endpoint=neptune_endpoint)
+        print("  Clearing existing graph...")
+        client.clear_graph()
 
         # Re-read the CSVs we just wrote for the training set
         _user_csv = pd.read_csv(os.path.join(tabformer_gnn, "nodes/user.csv"))
         _mx_csv = pd.read_csv(os.path.join(tabformer_gnn, "nodes/merchant.csv"))
-        _edge_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant.csv"))
-        _attr_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant_attr.csv"))
-        _label_csv = pd.read_csv(os.path.join(tabformer_gnn, "edges/user_to_merchant_label.csv"))
+        _edge_csv = pd.read_csv(
+            os.path.join(tabformer_gnn, "edges/user_to_merchant.csv")
+        )
+        _attr_csv = pd.read_csv(
+            os.path.join(tabformer_gnn, "edges/user_to_merchant_attr.csv")
+        )
+        _label_csv = pd.read_csv(
+            os.path.join(tabformer_gnn, "edges/user_to_merchant_label.csv")
+        )
 
         print("  Writing users...")
         client.write_users_batch(_user_csv)

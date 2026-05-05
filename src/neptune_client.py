@@ -78,7 +78,7 @@ class NeptuneClient:
             for idx, row in user_df.iterrows()
         ]
         for i in range(0, len(rows), batch_size):
-            self._batch_merge_nodes("User", "uid", rows[i : i + batch_size])
+            self._batch_create_nodes("User", "uid", rows[i : i + batch_size])
 
     def write_merchants_batch(self, merchant_df, batch_size=50):
         rows = [
@@ -86,7 +86,7 @@ class NeptuneClient:
             for idx, row in merchant_df.iterrows()
         ]
         for i in range(0, len(rows), batch_size):
-            self._batch_merge_nodes("Merchant", "mid", rows[i : i + batch_size])
+            self._batch_create_nodes("Merchant", "mid", rows[i : i + batch_size])
 
     def write_transactions_batch(
         self, edge_index, edge_attr_df, edge_label_df, batch_size=100
@@ -104,9 +104,9 @@ class NeptuneClient:
         for i in range(0, len(rows), batch_size):
             self._batch_create_edges(rows[i : i + batch_size])
 
-    def _batch_merge_nodes(self, label, id_key, rows):
+    def _batch_create_nodes(self, label, id_key, rows):
         self.execute_opencypher(
-            f"UNWIND $rows AS row MERGE (n:{label} {{{id_key}: row.{id_key}}}) SET n.features = row.features",
+            f"UNWIND $rows AS row CREATE (n:{label} {{{id_key}: row.{id_key}, features: row.features}})",
             {"rows": rows},
         )
 
