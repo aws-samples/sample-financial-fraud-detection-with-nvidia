@@ -8,6 +8,12 @@ The insight is simple. Fraudsters don't operate in isolation. They create patter
 
 This implementation runs entirely on AWS using SageMaker Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK with a fully managed, serverless approach that eliminates cluster management overhead.
 
+## Neptune Graph Backend
+
+The processed transaction graph is persisted to Amazon Neptune Serverless, replacing the CSV-on-S3 approach for graph storage. During preprocessing, the pipeline clears and rewrites the full graph (users, merchants, and transaction edges) into Neptune using OpenCypher. The test scripts and inference clients read from Neptune by default, falling back to S3 if the Neptune stack isn't deployed.
+
+A few things to be aware of. Neptune Serverless scales from 1 to 8 NCUs based on demand, but the cold-start window matters. The first batch writes after a period of inactivity hit a cluster sitting at minimum capacity. The client handles this with small batch sizes (50 nodes, 100 edges), exponential backoff retries on timeouts and 5xx responses, and a clear-then-CREATE pattern instead of MERGE to avoid lock contention. If you see `ConcurrentModificationException` errors in the logs, the retries should absorb them — but if they persist, bumping `minCapacity` in `infra/lib/neptune-graph-stack.ts` from 1 to 2 NCUs will help at the cost of a higher baseline bill.
+
 ## The Pipeline
 
 When you trigger a pipeline run, three stages execute in sequence.
