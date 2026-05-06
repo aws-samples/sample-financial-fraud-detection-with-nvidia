@@ -68,7 +68,18 @@ class NeptuneClient:
         return self._signed_request("POST", "/opencypher", data)
 
     def clear_graph(self):
-        self.execute_opencypher("MATCH (n) DETACH DELETE n")
+        """Reset the Neptune database using the fast reset API."""
+        resp = self._signed_request(
+            "POST", "/system", {"action": "initiateDatabaseReset"}
+        )
+        token = resp.get("payload", {}).get("token")
+        if not token:
+            raise RuntimeError(f"Failed to initiate database reset: {resp}")
+        self._signed_request(
+            "POST", "/system", {"action": "performDatabaseReset", "token": token}
+        )
+        # Give Neptune a moment to finish the reset before writes begin
+        time.sleep(5)
 
     # --- Batch writes ---
 
