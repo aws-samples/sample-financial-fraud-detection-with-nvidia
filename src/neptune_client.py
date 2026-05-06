@@ -78,8 +78,29 @@ class NeptuneClient:
         self._signed_request(
             "POST", "/system", {"action": "performDatabaseReset", "token": token}
         )
-        # Give Neptune a moment to finish the reset before writes begin
-        time.sleep(5)
+        # Neptune restarts after a fast reset — poll until it's accepting connections
+        self._wait_for_ready()
+
+    def _wait_for_ready(self, timeout=120, interval=5):
+        """Poll Neptune status endpoint until the database is available."""
+        import urllib3
+
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        url = f"{self.base_url}/status"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                resp = requests.get(url, timeout=5, verify=True)
+                if resp.status_code == 200:
+                    print("  Neptune is ready.")
+                    return
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+                pass
+            print(
+                f"  Waiting for Neptune to restart ({int(deadline - time.time())}s remaining)..."
+            )
+            time.sleep(interval)
+        raise RuntimeError("Neptune did not become available after reset")
 
     # --- Batch writes ---
 
