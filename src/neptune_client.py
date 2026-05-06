@@ -68,39 +68,18 @@ class NeptuneClient:
         return self._signed_request("POST", "/opencypher", data)
 
     def clear_graph(self):
-        """Reset the Neptune database using the fast reset API."""
-        resp = self._signed_request(
-            "POST", "/system", {"action": "initiateDatabaseReset"}
-        )
-        token = resp.get("payload", {}).get("token")
-        if not token:
-            raise RuntimeError(f"Failed to initiate database reset: {resp}")
-        self._signed_request(
-            "POST", "/system", {"action": "performDatabaseReset", "token": token}
-        )
-        # Neptune restarts after a fast reset — poll until it's accepting connections
-        self._wait_for_ready()
-
-    def _wait_for_ready(self, timeout=120, interval=5):
-        """Poll Neptune status endpoint until the database is available."""
-        import urllib3
-
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        url = f"{self.base_url}/status"
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                resp = requests.get(url, timeout=5, verify=True)
-                if resp.status_code == 200:
-                    print("  Neptune is ready.")
-                    return
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-                pass
-            print(
-                f"  Waiting for Neptune to restart ({int(deadline - time.time())}s remaining)..."
+        """Delete all nodes and edges in batches. No-op on an empty graph."""
+        batch_size = 200
+        while True:
+            result = self.execute_opencypher(
+                f"MATCH (n) WITH n LIMIT {batch_size} DETACH DELETE n RETURN count(n) AS deleted"
             )
-            time.sleep(interval)
-        raise RuntimeError("Neptune did not become available after reset")
+            deleted = result.get("results", [{}])[0].get("deleted", 0)
+            if deleted == 0:
+                break
+            print(f"  Deleted {deleted} nodes...")
+            # Brief pause to let Neptune settle between batches
+            time.sleep(1)
 
     # --- Batch writes ---
 
