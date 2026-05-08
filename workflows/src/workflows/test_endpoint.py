@@ -95,43 +95,52 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
         except Exception:
             pass
     if neptune_endpoint:
-        from neptune_client import NeptuneClient
+        try:
+            from neptune_client import NeptuneClient
 
-        client = NeptuneClient(endpoint=neptune_endpoint)
-        graph = client.load_hetero_graph()
-        labels = graph["edge_label_user_to_merchant"]["Fraud"].values.astype(np.int32)
-        data = {
-            "x_user": graph["x_user"],
-            "x_merchant": graph["x_merchant"],
-            "edge_index_user_to_merchant": graph["edge_index_user_to_merchant"],
-            "edge_attr_user_to_merchant": graph["edge_attr_user_to_merchant"],
-            "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
-            "feature_mask_user": graph.get(
-                "feature_mask_user",
-                np.zeros(graph["x_user"].shape[1], dtype=np.int32),
-            ),
-            "feature_mask_merchant": graph.get(
-                "feature_mask_merchant",
-                np.zeros(graph["x_merchant"].shape[1], dtype=np.int32),
-            ),
-            "edge_feature_mask_user_to_merchant": graph.get(
-                "edge_feature_mask_user_to_merchant",
-                np.zeros(graph["edge_attr_user_to_merchant"].shape[1], dtype=np.int32),
-            ),
-        }
-        if max_transactions and max_transactions < len(labels):
-            indices = np.sort(
-                np.random.choice(len(labels), max_transactions, replace=False)
+            client = NeptuneClient(endpoint=neptune_endpoint)
+            graph = client.load_hetero_graph()
+            labels = graph["edge_label_user_to_merchant"]["Fraud"].values.astype(
+                np.int32
             )
-            data["edge_index_user_to_merchant"] = data["edge_index_user_to_merchant"][
-                :, indices
-            ]
-            data["edge_attr_user_to_merchant"] = data["edge_attr_user_to_merchant"][
-                indices
-            ]
-            labels = labels[indices]
-        print(f"  Loaded {len(labels)} transactions from Neptune")
-        return data, labels
+            data = {
+                "x_user": graph["x_user"],
+                "x_merchant": graph["x_merchant"],
+                "edge_index_user_to_merchant": graph["edge_index_user_to_merchant"],
+                "edge_attr_user_to_merchant": graph["edge_attr_user_to_merchant"],
+                "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
+                "feature_mask_user": graph.get(
+                    "feature_mask_user",
+                    np.zeros(graph["x_user"].shape[1], dtype=np.int32),
+                ),
+                "feature_mask_merchant": graph.get(
+                    "feature_mask_merchant",
+                    np.zeros(graph["x_merchant"].shape[1], dtype=np.int32),
+                ),
+                "edge_feature_mask_user_to_merchant": graph.get(
+                    "edge_feature_mask_user_to_merchant",
+                    np.zeros(
+                        graph["edge_attr_user_to_merchant"].shape[1], dtype=np.int32
+                    ),
+                ),
+            }
+            if max_transactions and max_transactions < len(labels):
+                indices = np.sort(
+                    np.random.choice(len(labels), max_transactions, replace=False)
+                )
+                data["edge_index_user_to_merchant"] = data[
+                    "edge_index_user_to_merchant"
+                ][:, indices]
+                data["edge_attr_user_to_merchant"] = data["edge_attr_user_to_merchant"][
+                    indices
+                ]
+                labels = labels[indices]
+            print(f"  Loaded {len(labels)} transactions from Neptune")
+            return data, labels
+        except Exception as e:
+            print(
+                f"  Neptune unreachable ({e.__class__.__name__}), falling back to S3..."
+            )
 
     def read_csv(key):
         response = s3_client.get_object(Bucket=bucket, Key=key)
