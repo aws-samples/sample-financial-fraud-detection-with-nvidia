@@ -105,15 +105,12 @@ export class SageMakerDomainStack extends cdk.Stack {
 
         userProfile.addDependency(this.domain);
 
-        // --- JupyterServer app: auto-provisions a notebook instance on deploy ---
-        const jupyterApp = new sagemaker.CfnApp(this, 'JupyterServerApp', {
-            appName: 'default',
-            appType: 'JupyterServer',
-            domainId: this.domainId,
-            userProfileName: userProfileName,
-        });
-
-        jupyterApp.addDependency(userProfile);
+        // NOTE: We intentionally do NOT create a CfnApp here. JupyterServer
+        // apps can take several minutes to boot (especially with a lifecycle
+        // script that clones a repo + pip-installs deps), which exceeds
+        // CloudFormation's stabilization timeout. The app is created
+        // automatically when a user first opens Studio, and the lifecycle
+        // config above will run at that point.
 
         // Outputs
         new cdk.CfnOutput(this, 'DomainId', {
