@@ -11,8 +11,9 @@ export interface NeptuneGraphStackProps extends cdk.StackProps {
 export class NeptuneGraphStack extends cdk.Stack {
   public readonly clusterEndpoint: string;
   public readonly clusterPort: string;
-  public readonly vpc: ec2.IVpc;
-  public readonly securityGroup: ec2.ISecurityGroup;
+  public readonly clusterPortNumber: number;
+  public readonly vpc: ec2.Vpc;
+  public readonly securityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: NeptuneGraphStackProps) {
     super(scope, id, props);
@@ -30,10 +31,25 @@ export class NeptuneGraphStack extends cdk.Stack {
       service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
     });
 
+    // Explicit security group so we can expose the concrete L2 type for
+    // cross-stack ingress rules (e.g. VPC peering).
+    this.securityGroup = new ec2.SecurityGroup(this, "NeptuneSecurityGroup", {
+      vpc: this.vpc,
+      description: "Security group for Neptune cluster",
+      allowAllOutbound: true,
+    });
+
+    this.securityGroup.addIngressRule(
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+      ec2.Port.tcp(8182),
+      "Neptune access from VPC",
+    );
+
     const cluster = new neptune.DatabaseCluster(this, "NeptuneCluster", {
       vpc: this.vpc,
       instanceType: neptune.InstanceType.SERVERLESS,
       iamAuthentication: true,
+      securityGroups: [this.securityGroup],
       serverlessScalingConfiguration: {
         minCapacity: 1,
         maxCapacity: 8,
@@ -41,11 +57,6 @@ export class NeptuneGraphStack extends cdk.Stack {
       storageEncrypted: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-
-    cluster.connections.allowDefaultPortFrom(
-      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
-      "Neptune access from VPC",
-    );
 
     // Create the Neptune access policy locally in this stack to avoid a cyclic
     // cross-stack reference (cluster resource ID must stay in this template).
@@ -70,9 +81,9 @@ export class NeptuneGraphStack extends cdk.Stack {
       ],
     });
 
-    this.securityGroup = cluster.connections.securityGroups[0];
     this.clusterEndpoint = cluster.clusterEndpoint.hostname;
     this.clusterPort = cluster.clusterEndpoint.port.toString();
+    this.clusterPortNumber = cluster.clusterEndpoint.port;
 
     new cdk.CfnOutput(this, "NeptuneEndpoint", {
       value: cluster.clusterEndpoint.hostname,
