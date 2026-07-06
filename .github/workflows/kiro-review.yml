@@ -27,7 +27,7 @@ jobs:
         run: |
           git diff origin/main...HEAD | kiro-cli chat \
             --no-interactive \
-            --trust-tools=read,grep \
+            --trust-all-tools \
             "Review the changes in this PR for code quality, security issues, notebook best practices, and infrastructure patterns. Group findings by severity (critical, warning, suggestion). At the end, output exactly one of these verdicts on its own line: VERDICT: PASS or VERDICT: FAIL (use FAIL only for critical security or correctness issues)." \
             | tee /tmp/kiro-review.txt
 
