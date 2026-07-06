@@ -1,0 +1,25 @@
+name: Kiro Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Kiro CLI
+        run: curl -fsSL https://cli.kiro.dev/install | bash
+
+      - name: Review PR changes
+        env:
+          KIRO_API_KEY: ${{ secrets.KIRO_API_KEY }}
+        run: |
+          git diff origin/main...HEAD | kiro-cli chat \
+            --no-interactive \
+            --trust-tools=read,grep \
+            "Review the changes in this PR for code quality, security issues, notebook best practices, and infrastructure patterns. Group findings by severity (critical, warning, suggestion)."
