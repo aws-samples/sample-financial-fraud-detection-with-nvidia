@@ -28,23 +28,39 @@ jobs:
           git diff origin/main...HEAD | kiro-cli chat \
             --no-interactive \
             --trust-all-tools \
-            "Review the changes in this PR for code quality, security issues, notebook best practices, and infrastructure patterns. Group findings by severity (critical, warning, suggestion). At the end, output exactly one of these verdicts on its own line: VERDICT: PASS or VERDICT: FAIL (use FAIL only for critical security or correctness issues)." \
-            | tee /tmp/kiro-review.txt
+            "Review the changes in this PR for code quality, security issues, notebook best practices, and infrastructure patterns. Group findings by severity (critical, warning, suggestion). At the end, output exactly one of these verdicts on its own line: VERDICT: PASS or VERDICT: FAIL (use FAIL only for critical security or correctness issues). Write your full review summary to a file called kiro-review-summary.md in the repo root." \
+
+      - name: Strip ANSI codes from summary
+        run: |
+          if [ -f kiro-review-summary.md ]; then
+            sed 's/\x1b\[[0-9;]*m//g' kiro-review-summary.md > /tmp/kiro-review.md
+            mv /tmp/kiro-review.md kiro-review-summary.md
+          else
+            echo "No review summary file generated" > kiro-review-summary.md
+          fi
 
       - name: Post review as PR comment
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "## 🔍 Kiro Code Review" > /tmp/comment.md
-          echo "" >> /tmp/comment.md
-          cat /tmp/kiro-review.txt >> /tmp/comment.md
+          {
+            echo "## 🔍 Kiro Code Review"
+            echo ""
+            cat kiro-review-summary.md
+          } > /tmp/comment.md
           gh pr comment ${{ github.event.pull_request.number }} \
             --repo ${{ github.repository }} \
             --body-file /tmp/comment.md
 
+      - name: Upload review summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: kiro-review-summary
+          path: kiro-review-summary.md
+
       - name: Check verdict
         run: |
-          if grep -q "VERDICT: FAIL" /tmp/kiro-review.txt; then
+          if grep -q "VERDICT: FAIL" kiro-review-summary.md; then
             echo "::error::Kiro review found critical issues"
             exit 1
           fi
