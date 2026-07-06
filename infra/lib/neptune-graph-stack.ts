@@ -19,6 +19,7 @@ export class NeptuneGraphStack extends cdk.Stack {
     super(scope, id, props);
 
     this.vpc = new ec2.Vpc(this, "NeptuneVpc", {
+      ipAddresses: ec2.IpAddresses.cidr("10.1.0.0/16"),
       maxAzs: 2,
       natGateways: 1,
       gatewayEndpoints: {

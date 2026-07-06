@@ -25,6 +25,7 @@ export class SageMakerDomainStack extends cdk.Stack {
 
         // Create a VPC for SageMaker Studio (required)
         this.vpc = new ec2.Vpc(this, 'SageMakerVPC', {
+            ipAddresses: ec2.IpAddresses.cidr('10.2.0.0/16'),
             maxAzs: 2,
             natGateways: 1,
             subnetConfiguration: [
