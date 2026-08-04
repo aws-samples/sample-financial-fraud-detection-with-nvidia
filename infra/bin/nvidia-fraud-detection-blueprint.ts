@@ -39,7 +39,7 @@ const preprocessingImageRepo = new SageMakerPreprocessingImageRepoStack(
     env: env,
     repoUrl:
       "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker",
+    branch: "main",
   },
 );
 
@@ -48,7 +48,7 @@ const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
   env: env,
   repoUrl:
     "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-  branch: "v2_sagemaker",
+  branch: "main",
 });
 
 // 3. Base Infrastructure (S3 buckets)
