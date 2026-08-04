@@ -3,9 +3,11 @@ import { NvidiaFraudDetectionBlueprint } from "../lib/nvidia-fraud-detection-blu
 import { SageMakerTrainingImageRepoStack } from "../lib/sagemaker-training-image-repo";
 import { SageMakerPreprocessingImageRepoStack } from "../lib/sagemaker-preprocessing-image-repo";
 import { TritonImageRepoStack } from "../lib/triton-image-repo";
+import { NeptuneGraphStack } from "../lib/neptune-graph-stack";
 import { SageMakerInfraStack } from "../lib/sagemaker-infrastructure-stack";
 import { SageMakerTritonEndpointStack } from "../lib/sagemaker-triton-endpoint-stack";
 import { SageMakerDomainStack } from "../lib/sagemaker-domain-stack";
+import { VpcPeeringStack } from "../lib/vpc-peering-stack";
 
 const app = new cdk.App();
 
@@ -13,6 +15,10 @@ const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION,
 };
+
+const repoUrl =
+  "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git";
+const branch = "feature/neptune-graph-backend";
 
 // Config
 const modelBucketName =
@@ -26,9 +32,8 @@ const trainingImageRepo = new SageMakerTrainingImageRepoStack(
   "SageMakerTrainingImageRepoStack",
   {
     env: env,
-    repoUrl:
-      "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "main",
+    repoUrl: repoUrl,
+    branch: branch,
   },
 );
 
@@ -37,18 +42,16 @@ const preprocessingImageRepo = new SageMakerPreprocessingImageRepoStack(
   "SageMakerPreprocessingImageRepoStack",
   {
     env: env,
-    repoUrl:
-      "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-    branch: "v2_sagemaker",
+    repoUrl: repoUrl,
+    branch: branch,
   },
 );
 
 // 2. Inference Image Repo (Triton)
 const tritonImageRepo = new TritonImageRepoStack(app, "TritonImageRepoStack", {
   env: env,
-  repoUrl:
-    "https://github.com/aws-samples/sample-financial-fraud-detection-with-nvidia.git",
-  branch: "v2_sagemaker",
+  repoUrl: repoUrl,
+  branch: branch,
 });
 
 // 3. Base Infrastructure (S3 buckets)
@@ -71,13 +74,33 @@ const smInfra = new SageMakerInfraStack(app, "SageMakerInfraStack", {
 });
 smInfra.addDependency(baseInfra);
 
-// 5. SageMaker Domain (for Studio access to Pipelines)
+// 5a. Neptune Graph Database
+const neptuneStack = new NeptuneGraphStack(app, "NeptuneGraphStack", {
+  env: env,
+  sagemakerExecutionRoleArn: smInfra.sagemakerExecutionRoleArn,
+});
+neptuneStack.addDependency(smInfra);
+
+// 5b. SageMaker Domain (Studio + JupyterServer notebook)
 const domainStack = new SageMakerDomainStack(app, "SageMakerDomainStack", {
   env: env,
   domainName: "fraud-detection-domain",
   executionRoleArn: smInfra.sagemakerExecutionRoleArn,
+  notebookRepoUrl: repoUrl,
+  notebookRepoBranch: branch,
 });
 domainStack.addDependency(smInfra);
+
+// 5c. VPC peering: SageMaker Studio ↔ Neptune
+const peeringStack = new VpcPeeringStack(app, "VpcPeeringStack", {
+  env: env,
+  sagemakerVpc: domainStack.vpc,
+  neptuneVpc: neptuneStack.vpc,
+  neptuneSecurityGroup: neptuneStack.securityGroup,
+  neptunePort: neptuneStack.clusterPortNumber,
+});
+peeringStack.addDependency(domainStack);
+peeringStack.addDependency(neptuneStack);
 
 // 6. Triton Endpoint (SageMaker)
 // Note: This requires a model.tar.gz to exist in the model bucket at the specified path.

@@ -4,17 +4,25 @@ Financial fraud costs institutions billions annually, and traditional rule-based
 
 The insight is simple. Fraudsters don't operate in isolation. They create patterns across multiple accounts, merchants, and time windows that become visible when you model transactions as a graph. A single suspicious transaction might look normal. That same transaction connected to a web of related activity tells a different story.
 
-> See [docs/aws-architecture-mermaid.md](docs/aws-architecture-mermaid.md) for the full architecture diagram (Mermaid).
+![GNN Fraud Detection Architecture](docs/gnn_fraud_detection_architecture_light.png)
 
 This implementation runs entirely on AWS using SageMaker Pipelines for orchestration, RAPIDS for GPU-accelerated preprocessing, and NVIDIA Triton for inference. The infrastructure deploys via CDK with a fully managed, serverless approach that eliminates cluster management overhead.
+
+## Neptune Graph Backend
+
+The processed transaction graph is persisted to Amazon Neptune Serverless, replacing the CSV-on-S3 approach for graph storage. During preprocessing, the pipeline clears and rewrites the full graph (users, merchants, and transaction edges) into Neptune using OpenCypher. The test scripts and inference clients read from Neptune by default, falling back to S3 if the Neptune stack isn't deployed.
+
+A few things to be aware of. Neptune Serverless scales from 1 to 8 NCUs based on demand, but the cold-start window matters. The first batch writes after a period of inactivity hit a cluster sitting at minimum capacity. The client handles this with small batch sizes (50 nodes, 100 edges), exponential backoff retries on timeouts and 5xx responses, and a clear-then-CREATE pattern instead of MERGE to avoid lock contention. If you see `ConcurrentModificationException` errors in the logs, the retries should absorb them — but if they persist, bumping `minCapacity` in `infra/lib/neptune-graph-stack.ts` from 1 to 2 NCUs will help at the cost of a higher baseline bill.
+
+> **Warning:** The preprocessing step clears the entire Neptune graph before writing. This is acceptable for this blueprint where the pipeline reprocesses the full dataset each run, but is not suitable for production workloads with incremental ingestion or concurrent readers. A production implementation should use MERGE-based upserts (with a higher NCU floor to avoid lock contention) or batch loading via Neptune's bulk loader.
 
 ## The Pipeline
 
 When you trigger a pipeline run, three stages execute in sequence.
 
-**Preprocessing** transforms raw transactions into graph structure using RAPIDS. The TabFormer dataset (IBM's synthetic credit card dataset with 24 million transactions across 5,000 cardholders and 1,000 merchants) gets converted into a graph where cardholders and merchants become nodes, and transactions become edges. This runs on GPU-accelerated SageMaker Processing Jobs. What would take hours with pandas completes in minutes with cuDF.
+**Preprocessing** transforms raw transactions into graph structure using RAPIDS. The TabFormer dataset (IBM's synthetic credit card dataset with 24 million transactions across 5,000 cardholders and 1,000 merchants) gets converted into a graph where cardholders and merchants become nodes, and transactions become edges. This runs on GPU-accelerated SageMaker Processing Jobs.
 
-**Training** combines a Graph Neural Network (GraphSAGE) with XGBoost for fraud prediction. The GNN learns embeddings from the transaction graph structure while XGBoost handles the tabular features. Together they outperform either alone. SageMaker Training Jobs orchestrate this on GPU instances, automatically handling checkpointing, metrics logging, and artifact storage.
+**Training** combines a Graph Neural Network (GraphSAGE) with XGBoost for fraud prediction. The GNN learns embeddings from the transaction graph structure while XGBoost handles the tabular features. Together they outperform either alone. SageMaker Training Jobs orchestrate this on GPU instances, automatically handling caching, checkpointing, metrics logging, and artifact storage.
 
 **Model Registration** packages the trained model and registers it in SageMaker Model Registry with approval workflow. The model includes GNN weights, XGBoost model, and configuration for NVIDIA Triton inference serving. Models awaiting approval can be reviewed in SageMaker Studio before deployment.
 
@@ -66,6 +74,7 @@ This creates:
 - ECR repositories for custom containers
 - CodeBuild projects that start building images automatically
 - SageMaker execution roles
+- Neptune Serverless graph database (VPC, 1-8 NCUs)
 - SageMaker Domain for Studio access
 
 **Stage 2: Wait for Container Images**
@@ -218,7 +227,7 @@ workflows/
 └── uv.lock
 ```
 
-SageMaker manages artifact passing between steps via S3:
+SageMaker manages artifact passing between steps via S3, with graph data persisted to Neptune:
 
 ```
 ┌──────────────────────┐
@@ -227,21 +236,21 @@ SageMaker manages artifact passing between steps via S3:
 └──────────────────────┘
            │
            ▼
-┌──────────────────────┐
-│  Preprocessing       │
-│  (Processing Job)    │
-│  RAPIDS/cuDF on GPU  │
-└──────────────────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Processed Data (S3) │
-│  GNN graph + XGB     │
-└──────────────────────┘
-           │
-           ▼
-┌──────────────────────┐
-│  Training            │
+┌──────────────────────┐      ┌──────────────────────┐
+│  Preprocessing       │─────▶│  Neptune Serverless  │
+│  (Processing Job)    │      │  Graph Database      │
+│  RAPIDS/cuDF on GPU  │      │  Users → Merchants   │
+└──────────────────────┘      └──────────────────────┘
+           │                             │
+           ▼                             │
+┌──────────────────────┐                 │
+│  Processed Data (S3) │                 │
+│  GNN graph + XGB     │                 │
+└──────────────────────┘                 │
+           │                             │
+           ▼                             │
+┌──────────────────────┐                 │
+│  Training            │◀────────────────┘
 │  (Training Job)      │
 │  GNN + XGBoost       │
 └──────────────────────┘
@@ -254,11 +263,11 @@ SageMaker manages artifact passing between steps via S3:
 └──────────────────────┘
            │
            ▼
-┌──────────────────────┐
-│  Triton Endpoint     │
-│  Real-time inference │
-│  + Explainability    │
-└──────────────────────┘
+┌──────────────────────┐      ┌──────────────────────┐
+│  Triton Endpoint     │◀────▶│  Point of Sale       │
+│  Real-time inference │      │  Transaction auth    │
+│  + Explainability    │      │  + fraud scores      │
+└──────────────────────┘      └──────────────────────┘
 ```
 
 The model is called `prediction_and_shapley`. It takes merchant features, user features, and graph edge information as inputs. It returns fraud probability plus Shapley values that explain which features contributed most to the prediction. This explainability matters for regulatory compliance and fraud analyst workflows.
@@ -318,6 +327,7 @@ make clean-endpoints
 cd infra
 npx cdk destroy SageMakerTritonEndpointStack --profile <your-aws-profile>
 npx cdk destroy SageMakerDomainStack --profile <your-aws-profile>
+npx cdk destroy NeptuneGraphStack --profile <your-aws-profile>
 npx cdk destroy SageMakerInfraStack --profile <your-aws-profile>
 npx cdk destroy TritonImageRepoStack --profile <your-aws-profile>
 npx cdk destroy SageMakerTrainingImageRepoStack --profile <your-aws-profile>

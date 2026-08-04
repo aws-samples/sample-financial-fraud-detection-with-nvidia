@@ -58,6 +58,9 @@ import boto3
 import numpy as np
 import pandas as pd
 
+# Add src/ to path for neptune_client import
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "src"))
+
 # Feature dimensions from the TabFormer dataset preprocessing
 USER_FEATURE_DIM = 13  # Binary-encoded card ID
 MERCHANT_FEATURE_DIM = 24  # Merchant name + MCC (binary encoded)
@@ -81,6 +84,63 @@ def load_test_data_from_s3(s3_client, bucket, max_transactions=None, filter_node
     Returns:
         dict with keys matching the model's expected inputs, plus ground truth labels
     """
+
+    # Resolve Neptune endpoint: prefer env var, fall back to CloudFormation export
+    neptune_endpoint = os.environ.get("NEPTUNE_ENDPOINT")
+    if not neptune_endpoint:
+        try:
+            cf = boto3.client("cloudformation")
+            exports = {e["Name"]: e["Value"] for e in cf.list_exports()["Exports"]}
+            neptune_endpoint = exports.get("NeptuneClusterEndpoint")
+        except Exception:
+            pass
+    if neptune_endpoint:
+        try:
+            from neptune_client import NeptuneClient
+
+            client = NeptuneClient(endpoint=neptune_endpoint)
+            graph = client.load_hetero_graph()
+            labels = graph["edge_label_user_to_merchant"]["Fraud"].values.astype(
+                np.int32
+            )
+            data = {
+                "x_user": graph["x_user"],
+                "x_merchant": graph["x_merchant"],
+                "edge_index_user_to_merchant": graph["edge_index_user_to_merchant"],
+                "edge_attr_user_to_merchant": graph["edge_attr_user_to_merchant"],
+                "COMPUTE_SHAP": np.array([False], dtype=np.bool_),
+                "feature_mask_user": graph.get(
+                    "feature_mask_user",
+                    np.zeros(graph["x_user"].shape[1], dtype=np.int32),
+                ),
+                "feature_mask_merchant": graph.get(
+                    "feature_mask_merchant",
+                    np.zeros(graph["x_merchant"].shape[1], dtype=np.int32),
+                ),
+                "edge_feature_mask_user_to_merchant": graph.get(
+                    "edge_feature_mask_user_to_merchant",
+                    np.zeros(
+                        graph["edge_attr_user_to_merchant"].shape[1], dtype=np.int32
+                    ),
+                ),
+            }
+            if max_transactions and max_transactions < len(labels):
+                indices = np.sort(
+                    np.random.choice(len(labels), max_transactions, replace=False)
+                )
+                data["edge_index_user_to_merchant"] = data[
+                    "edge_index_user_to_merchant"
+                ][:, indices]
+                data["edge_attr_user_to_merchant"] = data["edge_attr_user_to_merchant"][
+                    indices
+                ]
+                labels = labels[indices]
+            print(f"  Loaded {len(labels)} transactions from Neptune")
+            return data, labels
+        except Exception as e:
+            print(
+                f"  Neptune unreachable ({e.__class__.__name__}), falling back to S3..."
+            )
 
     def read_csv(key):
         response = s3_client.get_object(Bucket=bucket, Key=key)

@@ -24,6 +24,7 @@ USER root
 
 # Copy preprocessing scripts
 # Assumes build context is the repository root
+COPY src/neptune_client.py neptune_client.py
 COPY src/preprocess_TabFormer_sagemaker.py preprocess.py
 COPY src/preprocess_TabFormer_lp.py preprocess_TabFormer_lp.py
 
